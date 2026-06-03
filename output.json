@@ -1,0 +1,1 @@
+{"errorMessage": "Unable to import module 'aws/lambda/handler_scraper': No module named 'aws'", "errorType": "Runtime.ImportModuleError", "requestId": "", "stackTrace": []}

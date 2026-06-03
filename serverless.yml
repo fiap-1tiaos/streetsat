@@ -1,0 +1,143 @@
+service: streetsat
+
+provider:
+  name: aws
+  runtime: python3.12
+  stage: ${opt:stage, 'dev'}
+  region: us-east-1
+  versionFunctions: false
+  environment:
+    S3_BUCKET: streetsat-models-${self:provider.stage}
+    SQS_INFERENCE_QUEUE_URL: !Ref InferenceQueue
+    SQS_ALERTS_QUEUE_URL: !Ref AlertQueue
+    SNS_TOPIC_ARN: !Ref AlertTopic
+    COMPREHEND_ENABLED: "false"
+    NASA_API_KEY: ${env:NASA_API_KEY, 'DEMO_KEY'}
+
+functions:
+  scraper:
+    handler: aws/lambda/handler_scraper.lambda_handler
+    timeout: 300
+    memorySize: 512
+    events:
+      - schedule:
+          rate: cron(*/5 * * * ? *)
+          enabled: true
+
+  inference:
+    handler: aws/lambda/handler_inference.lambda_handler
+    timeout: 60
+    memorySize: 1024
+    events:
+      - sqs:
+          arn: !GetAtt InferenceQueue.Arn
+          batchSize: 10
+
+  alerter:
+    handler: aws/lambda/handler_alerts.lambda_handler
+    timeout: 30
+    memorySize: 256
+    events:
+      - sqs:
+          arn: !GetAtt AlertQueue.Arn
+          batchSize: 5
+
+  api:
+    handler: src/api/fastapi_app.handler
+    timeout: 29
+    memorySize: 512
+    events:
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+      - httpApi:
+          path: /
+          method: ANY
+
+resources:
+  Resources:
+    ScrapingQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: streetsat-scraping-${self:provider.stage}
+        VisibilityTimeout: 300
+
+    InferenceQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: streetsat-inference-${self:provider.stage}
+        VisibilityTimeout: 60
+
+    AlertQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: streetsat-alerts-${self:provider.stage}
+        VisibilityTimeout: 30
+
+    AlertTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: streetsat-alerts-${self:provider.stage}
+
+    ModelBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Retain
+      Properties:
+        BucketName: streetsat-models-${self:provider.stage}
+        VersioningConfiguration:
+          Status: Enabled
+
+plugins:
+  - serverless-localstack
+
+package:
+  individually: false
+  patterns:
+    - "!**"
+    - "src/**"
+    - "aws/**"
+    - "!**/__pycache__/**"
+    - "!**/*.pyc"
+
+custom:
+  localstack:
+    debug: true
+    stages:
+      - dev
+    host: http://localhost
+    edgePort: 4566
+    autostart: false
+
+  pythonRequirements:
+    dockerizePip: false
+    zip: false
+    slim: true
+    requirementsFile: ./requirements-lambda.txt
+    useDownloadCache: true
+    useStaticCache: true
+    slimPatternsAuto: true
+    noDeploy:
+      - boto3
+      - botocore
+      - s3transfer
+      - matplotlib
+      - seaborn
+      - plotly
+      - dash
+      - dash-bootstrap-components
+      - folium
+      - geopandas
+      - shapely
+      - geopy
+      - xgboost
+      - httpx
+      - apscheduler
+      - motor
+      - pymongo
+      - redis
+      - sqlalchemy
+      - greenlet
+      - psycopg2-binary
+      - uvloop
+      - watchfiles
+      - websockets

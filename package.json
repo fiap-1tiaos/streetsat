@@ -1,0 +1,20 @@
+{
+  "name": "streetsat",
+  "version": "1.0.0",
+  "description": "Monitoramento inteligente de rotas brasileiras via satélite e IA.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "serverless-localstack": "^1.4.0"
+  }
+}
