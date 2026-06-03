@@ -1,0 +1,7 @@
+from src.core.config import API_BASE_URL, DASH_HOST, DASH_PORT
+
+UPDATE_INTERVAL_MS = 300_000  # 5 minutos
+DEBUG = True
+PORT = DASH_PORT
+HOST = DASH_HOST
+API_URL = API_BASE_URL

@@ -1,0 +1,76 @@
+{
+  "model_name": "random_forest_risk_scorer",
+  "version": "1.0.0",
+  "training_date": "2026-05-31T16:52:45.763020",
+  "accuracy": 0.4809,
+  "f1_score": 0.4133,
+  "cv_f1_mean": 0.4159,
+  "cv_f1_std": 0.0015,
+  "features": [
+    "hour",
+    "day_of_week",
+    "is_weekend",
+    "month",
+    "br_number",
+    "km_bucket",
+    "cause_encoded",
+    "type_encoded",
+    "weather_encoded",
+    "day_phase_encoded",
+    "road_type_encoded",
+    "road_layout_encoded",
+    "land_use_encoded",
+    "uf_encoded"
+  ],
+  "n_train": 338468,
+  "n_test": 84617,
+  "confusion_matrix": [
+    [
+      7463,
+      4501,
+      1382,
+      966
+    ],
+    [
+      9685,
+      25897,
+      7153,
+      3901
+    ],
+    [
+      3121,
+      6715,
+      4272,
+      3538
+    ],
+    [
+      833,
+      1126,
+      1005,
+      3059
+    ]
+  ],
+  "classification_report": "              precision    recall  f1-score   support\n\n       Livre       0.35      0.52      0.42     14312\n     Atenção       0.68      0.56      0.61     46636\n        Alto       0.31      0.24      0.27     17646\n     Crítico       0.27      0.51      0.35      6023\n\n    accuracy                           0.48     84617\n   macro avg       0.40      0.46      0.41     84617\nweighted avg       0.52      0.48      0.49     84617\n",
+  "feature_importance": {
+    "type_encoded": 0.3137738735508109,
+    "cause_encoded": 0.1424395114017788,
+    "km_bucket": 0.0777663308603606,
+    "hour": 0.07143916965742783,
+    "uf_encoded": 0.06895704294863979,
+    "br_number": 0.06269587550256431,
+    "month": 0.05196488668784238,
+    "road_layout_encoded": 0.042371774681234396,
+    "road_type_encoded": 0.037309698923905815,
+    "day_of_week": 0.03634214652129162,
+    "day_phase_encoded": 0.03004592398490215,
+    "land_use_encoded": 0.029527147366701947,
+    "weather_encoded": 0.026787158167247273,
+    "is_weekend": 0.008579459745292312
+  },
+  "hyperparameters": {
+    "n_estimators": 200,
+    "max_depth": 15,
+    "min_samples_leaf": 5,
+    "class_weight": "balanced"
+  }
+}

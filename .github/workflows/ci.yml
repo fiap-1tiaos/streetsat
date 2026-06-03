@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
+      - run: pip install black isort flake8
+      - run: black --check src/ dashboard/ aws/ scripts/ tests/
+      - run: isort --check-only src/ dashboard/ aws/ scripts/ tests/
+      - run: flake8 src/ dashboard/ aws/ --max-line-length=100 --ignore=E501,W503,E402
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
+      - run: pip install -r requirements-dev.txt
+      - run: pytest tests/unit/ -v --cov=src --cov-report=term-missing --cov-fail-under=60
+        env:
+          COMPREHEND_ENABLED: "false"
+          NASA_API_KEY: DEMO_KEY
+          DATABASE_URL: sqlite:///:memory:
+          REDIS_URL: redis://localhost:6379
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t streetsat:test .

@@ -1,0 +1,48 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Data (pesados — não commitar)
+data/raw/
+data/processed/
+docs/datatran/
+
+# Modelos treinados (commitar apenas model_metadata.json)
+models/*.pkl
+models/*.joblib
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testes
+.pytest_cache/
+.coverage
+htmlcov/
+
+# LocalStack
+.localstack/
+
+# Docker
+*.log
+node_modules/
+.serverless/
