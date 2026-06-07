@@ -38,65 +38,85 @@ O resultado final é exposto via API REST (FastAPI), visualizado em um dashboard
 ## Arquitetura do Sistema
 
 ```
-┌──────────────────────────────────────────────────────────────┐
+┌───────────────────────────────────────────────────────────────┐
 │                        FONTES DE DADOS                        │
 │  PRF CSV (96k)  │  ARTESP scraping  │  NASA POWER/EONET/FIRMS │
-└────────┬─────────────────┬──────────────────────┬────────────┘
-         │                 │                      │
-         ▼                 ▼                      ▼
-┌─────────────┐   ┌─────────────────┐   ┌─────────────────────┐
-│  PRF Loader  │   │  Lambda Scraper │   │   APIs NASA / clima  │
-│  + Cleaner   │   │  (a cada 5 min) │   │   (POWER, EONET,    │
-│  + Feature   │   │                 │   │    FIRMS)           │
-│  Engineering │   └────────┬────────┘   └──────────┬──────────┘
+└───────┬────────────────────┬────────────────────────┬─────────┘
+        │                    │                        │
+        ▼                    ▼                        ▼
+┌──────────────┐   ┌──────────────────┐   ┌─────────────────────┐
+│  PRF Loader  │   │  Lambda Scraper  │   │  APIs NASA / clima  │
+│  + Cleaner   │   │  (a cada 5 min)  │   │   (POWER, EONET,    │
+│  + Feature   │   │                  │   │    FIRMS)           │
+│  Engineering │   └────────┬─────────┘   └──────────┬──────────┘
 └──────┬───────┘            │                        │
        │                    ▼                        │
        │           ┌─────────────────┐               │
-       │           │   SQS Inference │               │
-       │           │   Queue         │               │
+       │           │  SQS Inference  │               │
+       │           │      Queue      │               │
        │           └────────┬────────┘               │
        ▼                    ▼                        ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                   CAMADA 1: SCORING ML                        │
-│   Random Forest (200 árvores, profundidade 15)                │
-│   14 features → score 0–3 + probabilidades                    │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────┐
-│                   CAMADA 2: NLP SEMÂNTICO                      │
-│   AWS Comprehend (prod) / LocalNLP PT-BR (dev)                │
+│                     CAMADA 1: SCORING ML                     │
+│         Random Forest (200 árvores, profundidade 15)         │
+│           14 features → score 0–3 + probabilidades           │
+└─────────────────────────────┬────────────────────────────────┘
+                              │
+                              ▼
+┌───────────────────────────────────────────────────────────────┐
+│                   CAMADA 2: NLP SEMÂNTICO                     │
+│        AWS Comprehend (prod) / LocalNLP PT-BR (dev)           │
 │   Análise de sentimento + entidades → severity boost +1/+2    │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-                           ▼
+└─────────────────────────────┬─────────────────────────────────┘
+                              │
+                              ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                   CAMADA 3: ROTEAMENTO                         │
-│   NetworkX — grafo de rodovias com pesos de risco             │
-│   Dijkstra (menor peso) vs. direto (menor distância)          │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-              ┌────────────┴────────────┐
-              ▼                         ▼
-     ┌─────────────────┐      ┌──────────────────┐
-     │   FastAPI REST  │      │  Plotly Dash      │
-     │   :8000         │      │  Dashboard :5000  │
-     └────────┬────────┘      └──────────────────┘
+│                   CAMADA 3: ROTEAMENTO                       │
+│       NetworkX — grafo de rodovias com pesos de risco        │
+│      Dijkstra (menor peso) vs. direto (menor distância)      │
+└─────────────────────────────┬────────────────────────────────┘
+                              │
+              ┌───────────────┴──────────────┐
+              ▼                              ▼
+     ┌─────────────────┐            ┌───────────────────┐
+     │   FastAPI REST  │            │  Plotly Dash      │
+     │   :8000         │            │  Dashboard :5000  │
+     └────────┬────────┘            └───────────────────┘
               │
      ┌────────┴─────────┐
      │                  │
      ▼                  ▼
-┌─────────┐    ┌──────────────┐
-│  Redis  │    │  SNS Alerts  │
-│  Cache  │    │  (e-mail/SMS)│
-└─────────┘    └──────────────┘
+┌─────────┐    ┌────────────────┐
+│  Redis  │    │  SNS Alerts    │
+│  Cache  │    │  (e-mail/SMS)  │
+└─────────┘    └────────────────┘
 ```
 
 ---
 
 ## Pipeline de Dados
 
-### 1. Carregamento PRF (`src/data/prf_loader.py`)
+### 1. Exploração e Validação do Dataset (`scripts/dataset_report.py `)
+
+Ferramenta auxiliar utilizada para validar a qualidade dos dados da PRF antes do treinamento do modelo.
+
+O relatório exibe:
+
+- Total de registros carregados
+- Período coberto pelos dados
+- Quantidade de UFs encontradas
+- Top 10 rodovias com mais ocorrências
+- Acidentes com mortos
+- Acidentes com ferídos graves
+- Valores nulos por coluna
+
+Execução:
+
+```bash
+python scripts/dataset_report.py 
+```
+
+### 2. Carregamento PRF (`src/data/prf_loader.py`)
 
 Lê os CSVs da PRF (separador `;`, encoding `latin-1`) disponíveis em `data/prf/`. Normaliza nomes de colunas e concatena múltiplos arquivos anuais.
 
@@ -106,7 +126,7 @@ data/prf/datatran2025.csv
 data/prf/datatran2026.csv
 ```
 
-### 2. Feature Engineering (`src/data/feature_engineering.py`)
+### 3. Feature Engineering (`src/data/feature_engineering.py`)
 
 Transforma o DataFrame bruto nas 14 features numéricas consumidas pelo modelo:
 
@@ -127,7 +147,7 @@ Transforma o DataFrame bruto nas 14 features numéricas consumidas pelo modelo:
 | `land_use_encoded` | `uso_solo` | LabelEncoder |
 | `uf_encoded` | `uf` | LabelEncoder |
 
-### 3. Label de Risco
+### 4. Label de Risco
 
 ```python
 score = 0  # Livre       → sem vítimas
@@ -879,7 +899,7 @@ API_BASE_URL=http://localhost:8000
 
 ## Início Rápido
 
-### Modo local (sem Docker)
+### Modo local — Linux | Mac
 
 ```bash
 # 1. Criar ambiente virtual
@@ -901,11 +921,53 @@ make train
 
 # 6. Subir a API
 make api
-# → http://localhost:8000/docs
 
-# 7. Subir o dashboard (outro terminal)
+# API disponível em:
+http://localhost:8000/docs
+
+# 7. Subir o dashboard (abra outro terminal com (.venv) ativo, sem fechar o anterior)
 make dashboard
-# → http://localhost:5000
+
+# Dashboard disponível em: 
+http://localhost:5000
+```
+
+### Modo local — Windows
+
+```bash
+# 1. Criar e ativar o ambiente virtual
+python -m venv .venv
+# Aperte CTRL + SHIFT + P
+# Procure por > Python: Select Interpreter
+# Selecione o que tem (.venv)
+# Ative com o comando abaixo (se no terminal não aparecer (.venv), feche-o e abra outro)
+.venv\Scripts\activate    
+
+# 2. Instalar dependências
+pip install -r requirements.txt
+
+# 3. Configurar variáveis de ambiente
+copy .env.example .env.local
+# Editar .env.local com suas credenciais
+
+# 4. Subir bancos via Docker (apenas infraestrutura)
+docker-compose up -d postgres redis mongodb localstack
+# Requer Docker Desktop em execução
+
+# 5. Treinar modelo
+python scripts\train_model.py
+
+# 6. Subir a API
+uvicorn src.api.fastapi_app:app --host 0.0.0.0 --port 8000 --reload
+
+# API disponível em:
+http://localhost:8000/docs
+
+# 7. Subir o dashboard (abra outro terminal com (.venv) ativo, sem fechar o anterior)
+python dashboard\app.py
+
+# Dashboard disponível em:
+http://localhost:5000
 ```
 
 ### Demos disponíveis
