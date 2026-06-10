@@ -8,22 +8,14 @@ import 'leaflet/dist/leaflet.css'
 import { SectionBadge } from '../components/SectionBadge'
 import { fadeUp, stagger, VIEWPORT } from '@/lib/motion-tokens'
 
-const MOCK: Occurrence[] = [
-  { id: 'OC-001', br: 116, km: 225, municipio: 'Guarulhos',   uf: 'SP', tipo: 'Colisão',         interdicao: false, risk_score: 2, risk_label: 'Alto',     detectado_em: new Date().toISOString(), lat: -23.4, lon: -46.5 },
-  { id: 'OC-002', br: 101, km: 180, municipio: 'Curitiba',    uf: 'PR', tipo: 'Tombamento',       interdicao: true,  risk_score: 3, risk_label: 'Crítico',  detectado_em: new Date().toISOString(), lat: -25.4, lon: -49.3 },
-  { id: 'OC-003', br: 381, km: 95,  municipio: 'Betim',       uf: 'MG', tipo: 'Atropelamento',    interdicao: false, risk_score: 1, risk_label: 'Atenção',  detectado_em: new Date().toISOString(), lat: -19.9, lon: -44.2 },
-  { id: 'OC-004', br: 40,  km: 312, municipio: 'Juiz de Fora',uf: 'MG', tipo: 'Capotamento',      interdicao: false, risk_score: 0, risk_label: 'Livre',    detectado_em: new Date().toISOString(), lat: -21.7, lon: -43.3 },
-  { id: 'OC-005', br: 50,  km: 142, municipio: 'Uberaba',     uf: 'MG', tipo: 'Colisão frontal',  interdicao: true,  risk_score: 3, risk_label: 'Crítico',  detectado_em: new Date().toISOString(), lat: -19.7, lon: -47.9 },
-]
-
 export function LiveFeedSection() {
   const ref    = useRef<HTMLElement>(null)
   const inView = useInView(ref, VIEWPORT)
   const fetcher = useCallback(() => api.occurrences(), [])
   const { data } = useRealtime({ fetcher, intervalMs: 30_000 })
 
-  const occurrences: Occurrence[] = Array.isArray(data) ? (data as Occurrence[]) : MOCK
-  const withCoords = occurrences.filter((o) => o.lat && o.lon).slice(0, 10)
+  const occurrences: Occurrence[] = Array.isArray(data) ? (data as Occurrence[]) : []
+  const withCoords = occurrences.filter((o) => o.latitude && o.longitude).slice(0, 10)
   const critical   = occurrences.filter((o) => o.risk_score === 3).length
   const tickerItems = [...occurrences, ...occurrences, ...occurrences]
 
@@ -86,14 +78,14 @@ export function LiveFeedSection() {
           >
             {tickerItems.map((o, i) => (
               <span
-                key={`${o.id}-${i}`}
+                key={`${o.occurrence_id}-${i}`}
                 className="inline-flex items-center gap-2 text-sm"
               >
                 <ScoreBadge score={o.risk_score} label={RISK_LABELS[o.risk_score]} color={RISK_COLORS[o.risk_score]} />
-                <span className="text-slate-300">BR-{o.br}</span>
+                <span className="text-slate-300">{o.road}</span>
                 <span className="text-slate-600 text-xs">km {o.km}</span>
                 <span className="text-slate-700 text-xs">·</span>
-                <span className="text-slate-500 text-xs">{o.municipio}/{o.uf}</span>
+                <span className="text-slate-500 text-xs">{o.municipio}/{o.state}</span>
                 <span className="text-slate-800 ml-3 text-xs">◆</span>
               </span>
             ))}
@@ -122,8 +114,8 @@ export function LiveFeedSection() {
             <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
             {withCoords.map((o) => (
               <CircleMarker
-                key={o.id}
-                center={[o.lat!, o.lon!]}
+                key={o.occurrence_id}
+                center={[o.latitude!, o.longitude!]}
                 radius={8 + o.risk_score * 3}
                 pathOptions={{
                   color:       RISK_COLORS[o.risk_score],
@@ -133,9 +125,9 @@ export function LiveFeedSection() {
                 }}
               >
                 <Popup>
-                  <strong>BR-{o.br} km {o.km}</strong>
+                  <strong>{o.road} km {o.km}</strong>
                   <br />
-                  {o.municipio}/{o.uf}
+                  {o.municipio}/{o.state}
                   <br />
                   Risco: {RISK_LABELS[o.risk_score]}
                 </Popup>

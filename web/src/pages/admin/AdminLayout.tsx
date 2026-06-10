@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation, Link } from 'react-router'
 import { motion, AnimatePresence } from 'motion/react'
 import {
   LayoutDashboard, Map, AlertTriangle, Bell, Brain,
-  ChevronLeft, ChevronRight, LogOut, Wifi, WifiOff, RefreshCw,
+  ChevronLeft, ChevronRight, LogOut, Wifi, WifiOff, RefreshCw, GitBranch,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useOccurrencesStore } from '@/stores/occurrencesStore'
@@ -14,6 +14,7 @@ const NAV = [
   { label: 'Mapa ao Vivo', icon: Map, path: '/admin/map' },
   { label: 'Ocorrências', icon: AlertTriangle, path: '/admin/occurrences' },
   { label: 'Alertas', icon: Bell, path: '/admin/alerts' },
+  { label: 'Pipeline', icon: GitBranch, path: '/admin/pipeline' },
   { label: 'Modelo ML', icon: Brain, path: '/admin/model' },
 ]
 

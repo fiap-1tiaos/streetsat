@@ -6,17 +6,31 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.api.routes.alerts_routes import router as alerts_router
+from src.api.routes.heatmap_routes import router as heatmap_router
+from src.api.routes.model_routes import router as model_router
+from src.api.routes.nasa_routes import router as nasa_router
 from src.api.routes.occurrences_routes import router as occurrences_router
+from src.api.routes.pipeline_routes import router as pipeline_router
 from src.api.routes.risk_routes import router as risk_router
 from src.api.routes.route_routes import router as route_router
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
+def _init_db():
+    try:
+        from src.db.postgres import create_tables
+        create_tables()
+    except Exception as e:
+        log.warning("Não foi possível inicializar PostgreSQL: %s", e)
+
+
 app = FastAPI(
     title="Streetsat API",
     description="Monitoramento inteligente de rotas via satélite e IA",
     version="1.0.0",
+    on_startup=[_init_db],
 )
 
 app.add_middleware(
@@ -45,8 +59,13 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-app.include_router(risk_router)
+app.include_router(alerts_router)
+app.include_router(heatmap_router)
+app.include_router(model_router)
+app.include_router(nasa_router)
 app.include_router(occurrences_router)
+app.include_router(pipeline_router)
+app.include_router(risk_router)
 app.include_router(route_router)
 
 

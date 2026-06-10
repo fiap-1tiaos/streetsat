@@ -13,7 +13,7 @@ load_dotenv(_env_file)
 ENV = os.getenv("ENV", "development")
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://streetsat:streetsat_dev@localhost:5432/streetsat_db")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+pg8000://streetsat:streetsat_dev@localhost:5432/streetsat_db")
 DATABASE_POOL_SIZE = int(os.getenv("DATABASE_POOL_SIZE", "5"))
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -31,7 +31,6 @@ SQS_INFERENCE_QUEUE_URL = os.getenv("SQS_INFERENCE_QUEUE_URL", "")
 SQS_ALERTS_QUEUE_URL = os.getenv("SQS_ALERTS_QUEUE_URL", "")
 
 NASA_API_KEY = os.getenv("NASA_API_KEY", "DEMO_KEY")
-FIRMS_MAP_KEY = os.getenv("FIRMS_MAP_KEY", "")
 
 COMPREHEND_ENABLED = os.getenv("COMPREHEND_ENABLED", "false").lower() == "true"
 USE_LOCALSTACK = os.getenv("USE_LOCALSTACK", "true").lower() == "true"
@@ -49,11 +48,8 @@ _WRITABLE_BASE = Path("/tmp/streetsat") if _IS_LAMBDA else BASE_DIR
 MODELS_DIR = _WRITABLE_BASE / "models" if _IS_LAMBDA else BASE_DIR / "models"
 DATA_DIR = _WRITABLE_BASE / "data" if _IS_LAMBDA else BASE_DIR / "data"
 DOCS_DIR = _WRITABLE_BASE / "docs" if _IS_LAMBDA else BASE_DIR / "docs"
-PRF_DIR = DATA_DIR / "prf"
-
 if not _IS_LAMBDA:
     MODELS_DIR.mkdir(exist_ok=True)
-    PRF_DIR.mkdir(parents=True, exist_ok=True)
     (DATA_DIR / "raw" / "realtime").mkdir(parents=True, exist_ok=True)
     (DATA_DIR / "processed").mkdir(parents=True, exist_ok=True)
     (DOCS_DIR / "eda").mkdir(parents=True, exist_ok=True)

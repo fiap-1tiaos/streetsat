@@ -1,63 +1,44 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { motion } from 'motion/react'
-import { Bell, Send } from 'lucide-react'
+import { Bell, MapPin, Users } from 'lucide-react'
+import { useRealtime } from '@/hooks/useRealtime'
+import { api, type AlertResponse } from '@/lib/api'
 import { RISK_LABELS, RISK_COLORS, type Alert, formatDate } from '@/lib/utils'
 
-const MOCK_ALERTS: Alert[] = Array.from({ length: 12 }, (_, i) => ({
-  id: `ALT-${String(i + 1).padStart(3, '0')}`,
-  message: `Risco Crítico detectado na BR-${[101, 116, 381][i % 3]} km ${150 + i * 20} — ${['Tombamento de carreta', 'Colisão múltipla', 'Atropelamento'][i % 3]}`,
-  risk_score: (i % 2 === 0 ? 3 : 2) as 2 | 3,
-  br: [101, 116, 381][i % 3],
-  municipio: ['São Paulo', 'Curitiba', 'Betim'][i % 3],
-  timestamp: new Date(Date.now() - i * 3_600_000).toISOString(),
-  status: (i % 3 === 0 ? 'mock' : 'sent') as 'mock' | 'sent',
-}))
+function toAlert(r: AlertResponse): Alert {
+  return {
+    id: r.id,
+    message: r.message,
+    risk_score: r.risk_score as Alert['risk_score'],
+    road: r.road,
+    km: r.km,
+    municipio: r.municipio,
+    occurrence_type: r.occurrence_type,
+    risk_label: r.risk_label,
+    criticality: r.criticality,
+    victims_total: r.victims_total,
+    narrative: r.narrative,
+    latitude: r.latitude,
+    longitude: r.longitude,
+    detected_at: r.detected_at,
+    status: r.status,
+  }
+}
 
 export default function AlertsPage() {
-  const [alerts] = useState<Alert[]>(MOCK_ALERTS)
-  const [toastMsg, setToastMsg] = useState('')
-  const [toastVisible, setToastVisible] = useState(false)
+  const fetcher = useCallback(() => api.alerts(), [])
+  const { data: items, refetch } = useRealtime({ fetcher, intervalMs: 30_000 })
+  const alerts = (items ?? []).map(toAlert)
   const [filterScore, setFilterScore] = useState<number>(0)
   const [dateFilter, setDateFilter] = useState('')
 
   const filtered = alerts.filter(
     (a) => a.risk_score >= filterScore &&
-      (!dateFilter || a.timestamp.slice(0, 10) === dateFilter)
+      (!dateFilter || a.detected_at.slice(0, 10) === dateFilter)
   )
-
-  const testAlert = () => {
-    setToastMsg('Alerta de teste enviado via SNS (mock) — BR-116 km 225')
-    setToastVisible(true)
-    setTimeout(() => setToastVisible(false), 4000)
-  }
 
   return (
     <div>
-      {/* Toast */}
-      {toastVisible && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          style={{
-            position: 'fixed', top: '80px', right: '1.5rem', zIndex: 999,
-            padding: '0.75rem 1.25rem',
-            background: 'rgba(34,197,94,0.15)',
-            border: '1px solid rgba(34,197,94,0.4)',
-            borderRadius: '8px',
-            color: '#22c55e',
-            fontFamily: 'Space Grotesk, sans-serif',
-            fontWeight: 600,
-            fontSize: '0.85rem',
-            backdropFilter: 'blur(12px)',
-            maxWidth: '380px',
-          }}
-        >
-          ✓ {toastMsg}
-        </motion.div>
-      )}
-
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <div>
@@ -101,30 +82,35 @@ export default function AlertsPage() {
           />
         </div>
 
-        <motion.button
-          onClick={testAlert}
-          whileHover={{ scale: 1.02, boxShadow: '0 0 20px rgba(0,212,255,0.2)' }}
-          whileTap={{ scale: 0.98 }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '0.5rem',
-            padding: '0.5rem 1.25rem',
-            background: 'rgba(0,212,255,0.08)',
-            border: '1px solid rgba(0,212,255,0.25)',
-            borderRadius: '8px',
-            color: '#00d4ff',
-            fontFamily: 'Space Grotesk, sans-serif',
-            fontWeight: 600,
-            fontSize: '0.85rem',
-            cursor: 'pointer',
-          }}
-        >
-          <Send size={14} />
-          Testar Alerta
-        </motion.button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <motion.button
+            onClick={() => refetch()}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+              padding: '0.5rem 1.25rem',
+              background: 'rgba(0,212,255,0.08)',
+              border: '1px solid rgba(0,212,255,0.25)',
+              borderRadius: '8px',
+              color: '#00d4ff',
+              fontFamily: 'Space Grotesk, sans-serif',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+            }}
+          >
+            Atualizar
+          </motion.button>
+        </div>
       </div>
 
-      {/* Alert cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        {filtered.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#475569', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.8rem' }}>
+            Nenhum alerta encontrado
+          </div>
+        )}
         {filtered.map((alert, i) => (
           <motion.div
             key={alert.id}
@@ -135,24 +121,47 @@ export default function AlertsPage() {
             style={{ borderRadius: '10px', padding: '1rem 1.25rem', borderLeft: `3px solid ${RISK_COLORS[alert.risk_score]}` }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
-              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', flex: 1 }}>
                 <Bell size={16} color={RISK_COLORS[alert.risk_score]} style={{ marginTop: '2px', flexShrink: 0 }} />
-                <div>
+                <div style={{ flex: 1 }}>
                   <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.7rem', color: '#475569', marginBottom: '0.25rem' }}>{alert.id}</div>
-                  <p style={{ margin: 0, fontSize: '0.875rem', color: '#e2e8f0', lineHeight: 1.5 }}>{alert.message}</p>
+                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', color: '#e2e8f0', lineHeight: 1.5 }}>{alert.message}</p>
+                  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.7rem', color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>
+                    {alert.km != null && (
+                      <span>KM {alert.km}</span>
+                    )}
+                    {alert.municipio && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <MapPin size={10} /> {alert.municipio}
+                      </span>
+                    )}
+                    {alert.occurrence_type && (
+                      <span>{alert.occurrence_type}</span>
+                    )}
+                    {alert.victims_total != null && alert.victims_total > 0 && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: alert.victims_total > 2 ? '#ef4444' : '#f59e0b' }}>
+                        <Users size={10} /> {alert.victims_total} vítimas
+                      </span>
+                    )}
+                  </div>
+                  {alert.narrative && (
+                    <div style={{ marginTop: '0.35rem', fontSize: '0.7rem', color: '#475569', fontStyle: 'italic', lineHeight: 1.4 }}>
+                      "{alert.narrative.slice(0, 120)}..."
+                    </div>
+                  )}
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem', flexShrink: 0 }}>
                 <span style={{ padding: '0.15rem 0.6rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', background: RISK_COLORS[alert.risk_score] + '22', color: RISK_COLORS[alert.risk_score], border: `1px solid ${RISK_COLORS[alert.risk_score]}44` }}>
-                  {RISK_LABELS[alert.risk_score]}
+                  {alert.risk_label ?? RISK_LABELS[alert.risk_score]}
                 </span>
                 <span style={{ fontSize: '0.65rem', color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-                  {alert.status === 'sent' ? '✓ SNS' : '◌ Mock'}
+                  {alert.status === 'active' ? '🟢 Ativo' : '◌ Inativo'}
                 </span>
               </div>
             </div>
             <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#475569', fontFamily: 'JetBrains Mono, monospace', paddingLeft: '1.75rem' }}>
-              {formatDate(alert.timestamp)} · BR-{alert.br} · {alert.municipio}
+              {alert.detected_at ? formatDate(alert.detected_at) : '—'} · {alert.road}
             </div>
           </motion.div>
         ))}

@@ -13,6 +13,8 @@ provider:
     SNS_TOPIC_ARN: !Ref AlertTopic
     COMPREHEND_ENABLED: "false"
     NASA_API_KEY: ${env:NASA_API_KEY, 'DEMO_KEY'}
+    DATABASE_URL: 'postgresql+pg8000://streetsat:streetsat_dev@postgres:5432/streetsat_db'
+    REDIS_URL: 'redis://redis:6379'
 
 functions:
   scraper:
@@ -23,6 +25,11 @@ functions:
       - schedule:
           rate: cron(*/5 * * * ? *)
           enabled: true
+    package:
+      patterns:
+        - "src/scrapers/**"
+        - "src/apis/**"
+        - "aws/lambda/handler_scraper.py"
 
   inference:
     handler: aws/lambda/handler_inference.lambda_handler
@@ -32,6 +39,12 @@ functions:
       - sqs:
           arn: !GetAtt InferenceQueue.Arn
           batchSize: 10
+    package:
+      patterns:
+        - "src/ml/**"
+        - "src/data/**"
+        - "src/nlp/**"
+        - "aws/lambda/handler_inference.py"
 
   alerter:
     handler: aws/lambda/handler_alerts.lambda_handler
@@ -41,6 +54,9 @@ functions:
       - sqs:
           arn: !GetAtt AlertQueue.Arn
           batchSize: 5
+    package:
+      patterns:
+        - "aws/lambda/handler_alerts.py"
 
   api:
     handler: src/api/fastapi_app.handler
@@ -53,6 +69,10 @@ functions:
       - httpApi:
           path: /
           method: ANY
+    package:
+      patterns:
+        - "src/api/**"
+        - "src/routing/**"
 
 resources:
   Resources:
@@ -91,11 +111,12 @@ plugins:
   - serverless-localstack
 
 package:
-  individually: false
+  individually: true
   patterns:
     - "!**"
-    - "src/**"
-    - "aws/**"
+    - "src/core/**"
+    - "src/utils/**"
+    - "src/db/**"
     - "!**/__pycache__/**"
     - "!**/*.pyc"
 
@@ -109,13 +130,23 @@ custom:
     autostart: false
 
   pythonRequirements:
-    dockerizePip: false
+    dockerizePip: true
+    strip: true
     zip: false
     slim: true
+    slimPatternsAppendDefaults: false
     requirementsFile: ./requirements-lambda.txt
     useDownloadCache: true
     useStaticCache: true
-    slimPatternsAuto: true
+    slimPatterns:
+      - "**/__pycache__/**"
+      - "**/*.pyc"
+      - "**/*.pyo"
+      - "**/tests/**"
+      - "**/test/**"
+      - "**/docs/**"
+      - "**/doc/**"
+      - "**/examples/**"
     noDeploy:
       - boto3
       - botocore
@@ -134,10 +165,8 @@ custom:
       - apscheduler
       - motor
       - pymongo
-      - redis
-      - sqlalchemy
-      - greenlet
       - psycopg2-binary
+      - greenlet
       - uvloop
       - watchfiles
       - websockets

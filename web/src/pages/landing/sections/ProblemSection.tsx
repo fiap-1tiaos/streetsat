@@ -12,25 +12,25 @@ const facts = [
     suffix: 'min',
     prefix: '1 morte /',
     label: 'mortalidade nas rodovias',
-    sub: 'dados PRF 2024',
+    sub: 'dados CCM-ARTESP 2026',
     color: '#ef4444',
   },
   {
     icon: MapPin,
-    value: 847,
-    suffix: '',
+    value: 160,
+    suffix: '+',
     prefix: '',
-    label: 'rodovias federais',
+    label: 'rodovias paulistas',
     sub: 'sem monitoramento contínuo',
     color: '#f59e0b',
   },
   {
     icon: AlertTriangle,
-    value: 96000,
+    value: 18000,
     suffix: '+',
     prefix: '',
-    label: 'acidentes registrados',
-    sub: 'PRF 2025–2026, base de treino',
+    label: 'ocorrências registradas',
+    sub: 'CCM-ARTESP 2026, base de treino',
     color: '#f97316',
   },
 ]
@@ -77,7 +77,7 @@ export function ProblemSection() {
             className="font-display font-bold leading-tight"
             style={{ fontSize: 'clamp(1.8rem, 4vw, 3rem)' }}
           >
-            Rodovias brasileiras matam mais de{' '}
+            Rodovias paulistas registram mais de{' '}
             <span className="text-red-400">
               {inView ? (
                 <AnimatedCounter value={5500} suffix="" />

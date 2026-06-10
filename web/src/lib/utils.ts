@@ -17,31 +17,41 @@ export const RISK_BG = [
 export type RiskScore = 0 | 1 | 2 | 3
 
 export interface Occurrence {
-  id: string
-  br: number
+  occurrence_id: string
+  road: string
   km: number
   municipio: string
-  uf: string
-  tipo: string
-  interdicao: boolean
+  state: string
+  occurrence_type: string
+  interdiction_level: number
   risk_score: RiskScore
   risk_label: string
   nlp_sentiment?: string
   nlp_boost?: number
-  narrativa?: string
-  detectado_em: string
-  lat?: number
-  lon?: number
+  narrative?: string
+  detected_at: string
+  latitude?: number
+  longitude?: number
+  status?: string
+  status_timestamp?: string
 }
 
 export interface Alert {
   id: string
   message: string
   risk_score: RiskScore
-  br: number
-  municipio: string
-  timestamp: string
-  status: 'sent' | 'mock' | 'failed'
+  road: string
+  km?: number
+  municipio?: string
+  occurrence_type?: string
+  risk_label?: string
+  criticality?: number
+  victims_total?: number
+  narrative?: string
+  latitude?: number
+  longitude?: number
+  detected_at: string
+  status: string
 }
 
 export function timeAgo(dateStr: string): string {

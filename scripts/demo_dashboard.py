@@ -10,7 +10,7 @@ from src.utils.logger import get_logger
 
 log = get_logger("demo")
 
-ROADS = ["SP-330", "SP-348", "BR-116", "BR-381", "BR-101", "SP-270"]
+ROADS = ["SP-330", "SP-310", "SP-348", "SP-280", "SP-065", "SP-270"]
 CITIES = ["Guarulhos", "Campinas", "São Paulo", "Santos", "Sorocaba", "Ribeirão Preto"]
 OCC_TYPES = ["acidente", "obra", "pane seca", "tombamento", "colisão frontal"]
 NARRATIVES = [

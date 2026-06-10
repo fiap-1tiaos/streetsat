@@ -1,131 +1,112 @@
-"""
-Treina o modelo Random Forest com dados PRF e exporta modelo_rf.pkl.
-Uso: python scripts/train_model.py
-"""
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
 import pandas as pd
 
-from src.core.config import PRF_DIR, MODELS_DIR, DOCS_DIR
-from src.core.constants import MODEL_FEATURES, RISK_LABELS
-from src.data.prf_loader import load_prf_data
-from src.data.data_cleaner import clean_prf_data
+from src.apis.nasa_eonet import NASAEONETClient
+from src.core.config import MODELS_DIR
+from src.core.constants import MODEL_FEATURES
+from src.data.artesp_loader import load_artesp_data
 from src.data.feature_engineering import build_risk_label, engineer_features, save_encoders
 from src.models.ml_model import train
+from src.utils.geo_utils import haversine_km
 from src.utils.logger import get_logger
 
 log = get_logger("train")
 
+SP_LAT_MIN, SP_LAT_MAX = -25.5, -19.5
+SP_LON_MIN, SP_LON_MAX = -53.0, -44.0
+
+
+def _in_sp_bbox(lat: float, lon: float) -> bool:
+    return SP_LAT_MIN <= lat <= SP_LAT_MAX and SP_LON_MIN <= lon <= SP_LON_MAX
+
+
+def _enrich_with_eonet(df: pd.DataFrame) -> pd.DataFrame:
+    try:
+        eonet = NASAEONETClient()
+        events = eonet.get_active_events()
+        if not events:
+            log.warning("Nenhum evento EONET ativo — features de EONET serão -1/0")
+            df["nearest_eonet_distance_km"] = -1
+            df["has_nearby_eonet"] = 0
+            return df
+
+        dists = []
+        for _, row in df.iterrows():
+            lat, lon = row.get("latitude"), row.get("longitude")
+            if lat is None or lon is None or not _in_sp_bbox(lat, lon):
+                dists.append(-1)
+                continue
+            min_dist = float("inf")
+            for ev in events:
+                dist = haversine_km(lat, lon, ev["lat"], ev["lon"])
+                if dist < min_dist:
+                    min_dist = dist
+            dists.append(round(min_dist, 1) if min_dist < 150 else -1)
+
+        df["nearest_eonet_distance_km"] = dists
+        df["has_nearby_eonet"] = (df["nearest_eonet_distance_km"] >= 0).astype(int)
+        log.info("EONET enriquecido: %d registros com evento próximo", int(df["has_nearby_eonet"].sum()))
+    except Exception as e:
+        log.warning("EONET indisponível para treino: %s", e)
+        df["nearest_eonet_distance_km"] = -1
+        df["has_nearby_eonet"] = 0
+    return df
+
+
+def _populate_heatmap(df: pd.DataFrame):
+    try:
+        from src.db.postgres import get_session, create_tables, populate_heatmap
+        create_tables()
+        session = get_session()
+        if session is None:
+            log.warning("Banco indisponível — heatmap não será populado")
+            return
+        try:
+            populate_heatmap(session, df)
+            log.info("Heatmap populado no banco")
+        finally:
+            session.close()
+    except Exception as e:
+        log.warning("Erro ao popular heatmap: %s", e)
+
 
 def main():
-    # ── 1. Carregar CSVs ──────────────────────────────────────────────────────
-    csv_files = sorted(PRF_DIR.glob("*.csv"))
-    if not csv_files:
-        log.error("Nenhum CSV encontrado em %s", PRF_DIR)
+    csv_path = Path("data/ccm-artesp/ccm-artesp.csv")
+    if not csv_path.exists():
+        log.error("CSV não encontrado: %s", csv_path)
         sys.exit(1)
-    log.info("Arquivos encontrados: %s", [f.name for f in csv_files])
 
-    df = load_prf_data(csv_files)
+    df = load_artesp_data(csv_path)
+    log.info("Registros carregados: %d", len(df))
 
-    # ── 2. Limpeza ────────────────────────────────────────────────────────────
-    df = clean_prf_data(df)
+    df = df.dropna(subset=["latitude", "longitude"])
+    df = df[df["road"] != "desconhecido"]
+    log.info("Após limpeza: %d registros", len(df))
 
-    # ── 3. EDA rápido ─────────────────────────────────────────────────────────
-    _plot_eda(df)
-
-    # ── 4. Feature engineering + label ────────────────────────────────────────
     df["risk_label"] = build_risk_label(df)
     log.info("Distribuição de labels:\n%s", df["risk_label"].value_counts().sort_index().to_string())
 
+    df = _enrich_with_eonet(df)
+
     df, encoders = engineer_features(df, fit=True)
-
-    # Garantir colunas presentes
-    missing = [c for c in MODEL_FEATURES if c not in df.columns]
-    if missing:
-        log.warning("Colunas ausentes (serão zeradas): %s", missing)
-        for c in missing:
-            df[c] = 0
-
     X = df[MODEL_FEATURES].copy()
     y = df["risk_label"]
 
-    # ── 5. Treino ─────────────────────────────────────────────────────────────
     pipeline, metadata = train(X, y, MODELS_DIR)
 
-    # ── 6. Salvar encoders ────────────────────────────────────────────────────
     enc_path = MODELS_DIR / "encoders.pkl"
     save_encoders(encoders, enc_path)
 
-    # ── 7. Plots de avaliação ─────────────────────────────────────────────────
-    _plot_confusion_matrix(metadata["confusion_matrix"])
-    _plot_feature_importance(metadata["feature_importance"])
-
-    log.info("✅ Treino concluído! F1-macro: %.4f | Acurácia: %.4f",
+    log.info("Treino concluído! F1-macro: %.4f | Acurácia: %.4f",
              metadata["f1_score"], metadata["accuracy"])
     log.info("Modelo: %s", MODELS_DIR / "modelo_rf.pkl")
 
-
-def _plot_eda(df: pd.DataFrame):
-    figs_dir = DOCS_DIR / "eda"
-
-    # Distribuição de acidentes por hora
-    if "hour" in df.columns:
-        fig, ax = plt.subplots(figsize=(12, 4))
-        df["hour"].value_counts().sort_index().plot(kind="bar", ax=ax, color="#3498DB")
-        ax.set_title("Acidentes por Hora do Dia")
-        ax.set_xlabel("Hora")
-        ax.set_ylabel("Quantidade")
-        fig.tight_layout()
-        fig.savefig(figs_dir / "acidentes_por_hora.png", dpi=100)
-        plt.close(fig)
-
-    # Top 10 causas
-    if "causa_acidente" in df.columns:
-        fig, ax = plt.subplots(figsize=(12, 5))
-        df["causa_acidente"].value_counts().head(10).plot(kind="barh", ax=ax, color="#E74C3C")
-        ax.set_title("Top 10 Causas de Acidente")
-        fig.tight_layout()
-        fig.savefig(figs_dir / "top_causas.png", dpi=100)
-        plt.close(fig)
-
-    log.info("Plots EDA salvos em %s", figs_dir)
-
-
-def _plot_confusion_matrix(cm: list):
-    figs_dir = DOCS_DIR / "figures"
-    labels = [RISK_LABELS[i] for i in range(4)]
-    fig, ax = plt.subplots(figsize=(7, 6))
-    sns.heatmap(np.array(cm), annot=True, fmt="d", cmap="Blues",
-                xticklabels=labels, yticklabels=labels, ax=ax)
-    ax.set_title("Matriz de Confusão")
-    ax.set_ylabel("Real")
-    ax.set_xlabel("Previsto")
-    fig.tight_layout()
-    fig.savefig(figs_dir / "confusion_matrix.png", dpi=100)
-    plt.close(fig)
-    log.info("Matriz de confusão salva em %s", figs_dir / "confusion_matrix.png")
-
-
-def _plot_feature_importance(importance: dict):
-    figs_dir = DOCS_DIR / "figures"
-    features = list(importance.keys())[:15]
-    values = [importance[k] for k in features]
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.barh(features[::-1], values[::-1], color="#2ECC71")
-    ax.set_title("Feature Importance (Top 15)")
-    ax.set_xlabel("Importância")
-    fig.tight_layout()
-    fig.savefig(figs_dir / "feature_importance.png", dpi=100)
-    plt.close(fig)
-    log.info("Feature importance salvo em %s", figs_dir / "feature_importance.png")
+    _populate_heatmap(df)
 
 
 if __name__ == "__main__":

@@ -5,30 +5,19 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 
-from src.core.constants import MODEL_FEATURES
+from src.core.constants import CATEGORICAL_COLS, MODEL_FEATURES
+from src.data.road_encoder import normalize_road_name
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
-CATEGORICAL_COLS = {
-    "causa_acidente": "cause_encoded",
-    "tipo_acidente": "type_encoded",
-    "condicao_metereologica": "weather_encoded",
-    "fase_dia": "day_phase_encoded",
-    "tipo_pista": "road_type_encoded",
-    "tracado_via": "road_layout_encoded",
-    "uso_solo": "land_use_encoded",
-    "uf": "uf_encoded",
-}
-
-NATIONAL_HOLIDAYS = {
-    (1, 1), (4, 21), (5, 1), (9, 7), (10, 12),
-    (11, 2), (11, 15), (11, 20), (12, 25),
-}
+ARTESP_CSV_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "ccm-artesp" / "ccm-artesp.csv"
 
 
 def build_risk_label(df: pd.DataFrame) -> pd.Series:
     label = pd.Series(0, index=df.index)
+    is_accident = df.get("classe", "").str.lower().str.strip() == "acidente"
+    label = np.where(is_accident, 1, label)
     if "feridos_leves" in df.columns:
         label = np.where(df["feridos_leves"] > 0, 1, label)
     if "feridos_graves" in df.columns:
@@ -40,30 +29,41 @@ def build_risk_label(df: pd.DataFrame) -> pd.Series:
 
 def engineer_features(df: pd.DataFrame, encoders: dict | None = None, fit: bool = True) -> tuple[pd.DataFrame, dict]:
     df = df.copy()
+    df, encoders = _engineer_basic_features(df, encoders, fit)
+    df = _engineer_eonet_features(df)
+    df = _engineer_weather_features(df)
+    return df, encoders
 
-    if "data_inversa" in df.columns:
-        df["month"] = df["data_inversa"].dt.month.fillna(1).astype(int)
-        df["day_of_week"] = df["data_inversa"].dt.dayofweek.fillna(0).astype(int)
-        df["is_weekend"] = (df["day_of_week"] >= 5).astype(int)
-        df["is_holiday"] = df["data_inversa"].apply(
-            lambda d: int((d.month, d.day) in NATIONAL_HOLIDAYS) if pd.notna(d) else 0
-        )
+
+def _engineer_basic_features(df: pd.DataFrame, encoders: dict | None = None, fit: bool = True) -> tuple[pd.DataFrame, dict]:
+    df = df.copy()
+
+    if "road" in df.columns:
+        df["road"] = df["road"].apply(lambda r: normalize_road_name(str(r)))
     else:
-        for col in ("month", "day_of_week", "is_weekend", "is_holiday"):
-            df[col] = 0
-
-    if "hour" not in df.columns:
-        df["hour"] = 12
-
-    df["br_number"] = df["br"].fillna(0).astype(int)
-
-    if "km" in df.columns:
-        df["km_bucket"] = (df["km"].fillna(0) // 10 * 10).astype(int)
-    else:
-        df["km_bucket"] = 0
+        df["road"] = "desconhecido"
 
     if encoders is None:
         encoders = {}
+
+    road_le = encoders.get("road_id")
+    if road_le is None and fit:
+        road_le = LabelEncoder()
+        valid_roads = df["road"].fillna("desconhecido").astype(str)
+        known = set(valid_roads)
+        known.add("desconhecido")
+        road_le.fit(list(known))
+        encoders["road_id"] = road_le
+
+    if road_le is not None:
+        known = set(road_le.classes_)
+        if "desconhecido" not in known:
+            road_le.classes_ = np.append(road_le.classes_, "desconhecido")
+        clean_roads = df["road"].fillna("desconhecido").astype(str)
+        clean_roads = clean_roads.apply(lambda r: r if r in known else "desconhecido")
+        df["road_id_encoded"] = road_le.transform(clean_roads)
+    else:
+        df["road_id_encoded"] = 0
 
     for src_col, dst_col in CATEGORICAL_COLS.items():
         if src_col not in df.columns:
@@ -85,11 +85,37 @@ def engineer_features(df: pd.DataFrame, encoders: dict | None = None, fit: bool 
                     le.classes_ = np.append(le.classes_, "desconhecido")
                 df[dst_col] = le.transform(col_data)
 
-    df["lat_rounded"] = df["latitude"].round(2) if "latitude" in df.columns else 0.0
-    df["lon_rounded"] = df["longitude"].round(2) if "longitude" in df.columns else 0.0
+    for col in ("km_mid", "has_blockage", "feridos_leves", "feridos_graves", "mortos"):
+        if col not in df.columns:
+            df[col] = 0
 
-    log.info("Feature engineering concluído: %d features geradas", len(MODEL_FEATURES))
+    missing = [c for c in MODEL_FEATURES if c not in df.columns]
+    if missing:
+        log.warning("Colunas ausentes (zeradas): %s", missing)
+        for c in missing:
+            df[c] = 0
+
+    log.info("Feature engineering concluído: %d features", len(MODEL_FEATURES))
     return df, encoders
+
+
+def _engineer_eonet_features(df: pd.DataFrame) -> pd.DataFrame:
+    if "nearest_eonet_distance_km" not in df.columns:
+        df["nearest_eonet_distance_km"] = -1
+
+    df["nearest_eonet_distance_km"] = pd.to_numeric(df["nearest_eonet_distance_km"], errors="coerce").fillna(-1)
+
+    df["has_nearby_eonet"] = (df["nearest_eonet_distance_km"] >= 0).astype(int)
+
+    return df
+
+
+def _engineer_weather_features(df: pd.DataFrame) -> pd.DataFrame:
+    for col in ("precipitation_mm", "wind_speed_ms", "temperature_c", "humidity"):
+        if col not in df.columns:
+            df[col] = 0 if col in ("precipitation_mm", "wind_speed_ms") else 25 if col == "temperature_c" else 70
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0 if col in ("precipitation_mm", "wind_speed_ms") else 25 if col == "temperature_c" else 70)
+    return df
 
 
 def save_encoders(encoders: dict, path: Path | str) -> None:

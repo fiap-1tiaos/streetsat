@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router'
 import { motion } from 'motion/react'
 import { StarfieldCanvas } from '../landing/components/StarfieldCanvas'
 
-const API_KEY = 'streetsat-2026'
-
 export default function LoginPage() {
   const [key, setKey] = useState('')
   const [loading, setLoading] = useState(false)
@@ -16,11 +14,11 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
     await new Promise((r) => setTimeout(r, 800))
-    if (key === API_KEY) {
+    if (key) {
       localStorage.setItem('streetsat-auth', key)
       navigate('/admin/dashboard')
     } else {
-      setError('API Key inválida. Use: streetsat-2026')
+      setError('API Key inválida.')
     }
     setLoading(false)
   }
@@ -66,7 +64,7 @@ export default function LoginPage() {
               type="password"
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              placeholder="streetsat-2026"
+              placeholder="Chave de API"
               autoComplete="current-password"
               style={{
                 width: '100%',
@@ -111,10 +109,6 @@ export default function LoginPage() {
             {loading ? 'Autenticando...' : 'Entrar'}
           </motion.button>
         </form>
-
-        <p style={{ textAlign: 'center', color: '#1e3a5f', fontSize: '0.7rem', marginTop: '1.5rem', fontFamily: 'JetBrains Mono, monospace' }}>
-          Demo: streetsat-2026
-        </p>
       </motion.div>
     </div>
   )

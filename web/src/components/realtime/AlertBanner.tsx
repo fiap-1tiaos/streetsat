@@ -12,7 +12,7 @@ export function AlertBanner() {
   useEffect(() => {
     const critical = occurrences.find((o: Occurrence) => o.risk_score === 3)
     if (critical) {
-      setMessage(`Alerta Crítico — BR-${critical.br} km ${critical.km} · ${critical.municipio}/${critical.uf}`)
+      setMessage(`Alerta Crítico — ${critical.road} km ${critical.km} · ${critical.municipio}/${critical.state}`)
       setVisible(true)
       const t = setTimeout(() => setVisible(false), 10_000)
       return () => clearTimeout(t)

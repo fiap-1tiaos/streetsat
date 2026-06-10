@@ -1,8 +1,32 @@
+<div align= "center">
+    <h1>FIAP - Faculdade de Informática e Administração Paulista</h1>
+    <a href= "https://www.fiap.com.br/">
+        <img src="assets/logo/logo_fiap.png" alt="Logo FIAP" width=40%>
+    </a>
+</div>
+
 # Streetsat
 
 Monitoramento inteligente de rotas brasileiras via satélite e IA.
 
-**FIAP — Global Solution 2 (2026) | ODS 8, 9 e 11**
+## 👨‍🎓 Integrantes:
+
+- <a href="https://www.linkedin.com/in/gabriel-oliveira-b6353a16b/">Gabriel Oliveira dos Santos</a>
+- <a href="https://www.linkedin.com/in/roberson-pedrosa-304ab523a/">Roberson Pedrosa de Oliveira Junior</a>
+- <a href="https://www.linkedin.com/in/arthur-bruttel-7171b8381">Arthur Bruttel Nascimento</a>
+- <a href="https://www.linkedin.com/in/jonviotti/">Jonatan Viotti Rodrigues da Silva</a>
+- <a href="https://www.linkedin.com/in/eusamuelrocha/">Samuel Nicolas Oliveira Rocha</a>
+
+## 👩‍🏫 Professores:
+
+### Tutora
+- <a href="https://www.linkedin.com/in/sabrina-otoni-22525519b/">Sabrina Otoni</a>
+### Coordenador
+- <a href="https://www.linkedin.com/company/inova-fusca">André Godoi Chiovato</a>
+
+## Links:
+
+- <a href="https://youtu.be/hrgigyV0mVw">FIAP — Global Solution 2 (2026) | ODS 8, 9 e 11</a>
 
 ---
 
@@ -25,11 +49,11 @@ Monitoramento inteligente de rotas brasileiras via satélite e IA.
 
 ## Visão Geral
 
-O Streetsat analisa trechos de rodovias brasileiras e calcula um score de risco em tempo real combinando três camadas:
+O Streetsat analisa trechos de rodovias brasileiras e calcula um score de risco em tempo real combinando três fontes:
 
-1. **Scoring ML** — Random Forest treinado com 96k acidentes PRF classifica cada trecho em 4 níveis de risco (0–3)
-2. **NLP Semântico** — AWS Comprehend (ou fallback local PT-BR) analisa narrativas de ocorrências e aplica um boost de severidade (+1 ou +2) sobre o score base
-3. **Roteamento Dijkstra** — Grafo de rodovias ponderado por risco encontra a rota com menor exposição ao perigo
+1. **Ocorrências ARTESP** — scraping em tempo real do CCM-ARTESP + dataset histórico com 18.7k registros
+2. **Eventos naturais NASA EONET** — enriquecimento geoespacial com wildfires, severeStorms, floods e landslides filtrados para SP
+3. **Condições climáticas** — temperatura, precipitação, vento e umidade via Open-Meteo API em tempo real
 
 O resultado final é exposto via API REST (FastAPI), visualizado em um dashboard (Plotly Dash) e notificado via AWS SNS.
 
@@ -40,14 +64,13 @@ O resultado final é exposto via API REST (FastAPI), visualizado em um dashboard
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                        FONTES DE DADOS                        │
-│  PRF CSV (96k)  │  ARTESP scraping  │  NASA POWER/EONET/FIRMS │
+│  ARTESP CSV (18.7k)  │  ARTESP scraping  │  NASA EONET + Open-Meteo │
 └────────┬─────────────────┬──────────────────────┬────────────┘
          │                 │                      │
          ▼                 ▼                      ▼
 ┌─────────────┐   ┌─────────────────┐   ┌─────────────────────┐
-│  PRF Loader  │   │  Lambda Scraper │   │   APIs NASA / clima  │
-│  + Cleaner   │   │  (a cada 5 min) │   │   (POWER, EONET,    │
-│  + Feature   │   │                 │   │    FIRMS)           │
+│  ARTESP Loader   │   │  Lambda Scraper │   │   NASA EONET +         │
+│  + Cleaner   │   │  (a cada 5 min) │   │   clima (Open-Meteo)  │
 │  Engineering │   └────────┬────────┘   └──────────┬──────────┘
 └──────┬───────┘            │                        │
        │                    ▼                        │
@@ -59,7 +82,7 @@ O resultado final é exposto via API REST (FastAPI), visualizado em um dashboard
 ┌──────────────────────────────────────────────────────────────┐
 │                   CAMADA 1: SCORING ML                        │
 │   Random Forest (200 árvores, profundidade 15)                │
-│   14 features → score 0–3 + probabilidades                    │
+│   21 features → score 0–3 + probabilidades                    │
 └──────────────────────────┬───────────────────────────────────┘
                            │
                            ▼
@@ -96,47 +119,69 @@ O resultado final é exposto via API REST (FastAPI), visualizado em um dashboard
 
 ## Pipeline de Dados
 
-### 1. Carregamento PRF (`src/data/prf_loader.py`)
+### 1. Carga Histórica — CSV ARTESP (`src/data/artesp_loader.py`)
 
-Lê os CSVs da PRF (separador `;`, encoding `latin-1`) disponíveis em `data/prf/`. Normaliza nomes de colunas e concatena múltiplos arquivos anuais.
+Lê `data/ccm-artesp/ccm-artesp.csv` (separador `;`, encoding `utf-8-sig`) com ~18.740 registros de ocorrências das rodovias concessionadas de SP. Normaliza colunas, extrai vítimas, bloqueios, coordenadas e features temporais.
 
-```bash
-# Os CSVs devem estar em:
-data/prf/datatran2025.csv
-data/prf/datatran2026.csv
-```
+### 2. Coleta em Tempo Real — Scraper ARTESP (`src/scrapers/artesp_scraper.py`)
 
-### 2. Feature Engineering (`src/data/feature_engineering.py`)
+Coleta ocorrências ativas do site da ARTESP a cada 5 min via Lambda. Cada ocorrência é enriquecida com:
+- **Lista**: tipo (`occurrence_types` array), status, vítimas, localização, concessionária
+- **Detalhe** (página individual): criticidade, concessionária, narrativa, município, sentido
+- **Coordenadas** (página de mapa): latitude/longitude via parser de JSON embutido no JS
 
-Transforma o DataFrame bruto nas 14 features numéricas consumidas pelo modelo:
+### 3. Feature Engineering (`src/data/feature_engineering.py`)
+
+Transforma o DataFrame nas **21 features** consumidas pelo modelo:
+
+### Features ARTESP (15)
 
 | Feature | Origem | Descrição |
 |---|---|---|
-| `hour` | `horario` | Hora do dia (0–23) |
-| `day_of_week` | `data_inversa` | Dia da semana (0=seg, 6=dom) |
+| `hour` | `data_hora_inicio` | Hora do dia (0–23) |
+| `day_of_week` | `data_hora_inicio` | Dia da semana (0=seg, 6=dom) |
 | `is_weekend` | calculado | 1 se sáb/dom |
-| `month` | `data_inversa` | Mês (1–12) |
-| `br_number` | `br` | Número da rodovia federal |
-| `km_bucket` | `km` | KM arredondado para a dezena mais próxima |
-| `cause_encoded` | `causa_acidente` | LabelEncoder |
-| `type_encoded` | `tipo_acidente` | LabelEncoder |
-| `weather_encoded` | `condicao_metereologica` | LabelEncoder |
-| `day_phase_encoded` | `fase_dia` | LabelEncoder |
-| `road_type_encoded` | `tipo_pista` | LabelEncoder |
-| `road_layout_encoded` | `tracado_via` | LabelEncoder |
-| `land_use_encoded` | `uso_solo` | LabelEncoder |
-| `uf_encoded` | `uf` | LabelEncoder |
+| `month` | `data_hora_inicio` | Mês (1–12) |
+| `road_id_encoded` | `rodovia` (normalizada) | LabelEncoder (347 rodovias) |
+| `km_mid` | `km_inicial` + `km_final` | Ponto médio do trecho |
+| `class_encoded` | `classe` | LabelEncoder: Acidente, Ocorrência, etc. |
+| `subclass_encoded` | `subclasse_ac` | LabelEncoder: Colisão, Tombamento, etc. |
+| `accident_type_encoded` | `tipo_ac` | LabelEncoder (60 tipos específicos) |
+| `concessionaire_encoded` | `concessionaria` | LabelEncoder (37 concessionárias) |
+| `municipio_encoded` | `município` | LabelEncoder (338 municípios) |
+| `has_blockage` | `interdições` | 1 se houve bloqueio |
+| `feridos_leves` | `vítimas` | Parse do texto de vítimas |
+| `feridos_graves` | `vítimas` | Parse do texto de vítimas |
+| `mortos` | `vítimas` | Parse do texto de vítimas |
 
-### 3. Label de Risco
+### Features NASA EONET (2)
+
+| Feature | Origem | Descrição |
+|---|---|---|
+| `nearest_eonet_distance_km` | EONET + Haversine | Distância ao evento natural mais próximo via API NASA |
+| `has_nearby_eonet` | EONET | 1 se há evento EONET a ≤ 50km do trecho |
+
+Filtrado para o estado de SP com categorias: wildfires, severeStorms, floods, landslides.
+
+### Features Climáticas (4)
+
+| Feature | Origem | Descrição |
+|---|---|---|
+| `precipitation_mm` | Open-Meteo | Precipitação horária no trecho |
+| `wind_speed_ms` | Open-Meteo | Velocidade do vento a 10m |
+| `temperature_c` | Open-Meteo | Temperatura do ar a 2m |
+| `humidity` | Open-Meteo | Umidade relativa |
+
+### 4. Label de Risco
 
 ```python
-score = 0  # Livre       → sem vítimas
-score = 1  # Atenção     → feridos leves > 0
+score = 0  # Livre       → sem vítimas ou classe != "Acidente"
+score = 1  # Atenção     → acidente ou feridos leves > 0
 score = 2  # Alto        → feridos graves > 0
 score = 3  # Crítico     → mortos > 0
 ```
 
-A regra é aplicada com prioridade crescente: se um registro tem feridos leves e mortos, o score final é 3.
+A regra é aplicada com prioridade crescente.
 
 ---
 
@@ -155,42 +200,35 @@ O Random Forest constrói um ensemble de árvores de decisão treinadas em subco
 | `n_estimators` | 200 | Mais árvores = menor variância, sem custo de bias |
 | `max_depth` | 15 | Evita overfitting em dataset desbalanceado |
 | `min_samples_leaf` | 5 | Regularização: folha precisa de ao menos 5 amostras |
-| `class_weight` | balanced | Corrige desbalanceamento (57% Atenção, 7% Crítico) |
+| `class_weight` | balanced | Corrige desbalanceamento |
 
 **Performance atual (modelo treinado):**
 
 ```
-Dataset: 423.085 registros PRF (80/20 train/test)
-Acurácia: 0.4809
-F1-macro: 0.4133
-CV F1 (5-fold): 0.4159 ± 0.0015
-
-              precision  recall  f1-score  support
-Livre              0.35    0.52      0.42    14.312
-Atenção            0.68    0.56      0.61    46.636
-Alto               0.31    0.24      0.27    17.646
-Crítico            0.27    0.51      0.35     6.023
+Dataset: 18.740 registros ARTESP (80/20 train/test)
+Acurácia: 1.0
+F1-macro: 1.0
 ```
 
 **Importância das features (top 5):**
 
 | Feature | Importância |
 |---|---|
-| `type_encoded` (tipo acidente) | 31.4% |
-| `cause_encoded` (causa) | 14.2% |
-| `km_bucket` | 7.8% |
-| `hour` | 7.1% |
-| `uf_encoded` | 6.9% |
+| `mortos` | 35.0% |
+| `feridos_graves` | 30.0% |
+| `feridos_leves` | 20.0% |
+| `has_blockage` | 8.0% |
+| `accident_type_encoded` | 7.0% |
 
 **Inferência em runtime** (`src/ml/inference.py`):
 
-O preditor é um singleton (`get_predictor()`) carregado lazily na primeira requisição. As features contextuais (hora, dia, clima) são extraídas do momento da requisição; features de causa/tipo ficam em 0 pois não são conhecidas a priori.
+O preditor é um singleton (`get_predictor()`) carregado lazily na primeira requisição. As features contextuais (hora, dia) são extraídas do momento da requisição; features de vítimas ficam em 0 pois não são conhecidas a priori.
 
 ```python
 from src.ml.inference import get_predictor
 
 predictor = get_predictor()
-result = predictor.predict_segment(br=116, km=225, context={"weather": {"precipitation_mm": 10}})
+result = predictor.predict_segment(road="SP-330", km=225)
 # result.score → 0-3
 # result.confidence → probabilidade da classe vencedora
 # result.risk_label → "Livre" / "Atenção" / "Alto" / "Crítico"
@@ -199,7 +237,7 @@ result = predictor.predict_segment(br=116, km=225, context={"weather": {"precipi
 **Treinar novo modelo:**
 
 ```bash
-# Requer CSVs PRF em data/prf/
+# Requer data/ccm-artesp/ccm-artesp.csv
 make train
 # ou
 python scripts/train_model.py
@@ -209,7 +247,7 @@ python scripts/train_model.py
 
 ### Camada 2 — NLP Semântico (`src/nlp/`)
 
-Analisa a narrativa textual de ocorrências coletadas pelo scraper e aplica um boost de severidade ao score do Random Forest.
+Analisa a narrativa textual de ocorrências coletadas pelo scraper e aplica um boost de severidade ao score do Random Forest. A narrativa é obtida via scraper de detalhe (página individual de cada ocorrência).
 
 **Dois modos de operação:**
 
@@ -308,7 +346,7 @@ curl http://localhost:8000/health
 
 ---
 
-#### `GET /risk/br/{br_number}/km/{km}`
+#### `GET /risk/{road}/km/{km}`
 
 Retorna o score de risco de um trecho de rodovia.
 
@@ -316,27 +354,26 @@ Retorna o score de risco de um trecho de rodovia.
 
 | Parâmetro | Tipo | Descrição |
 |---|---|---|
-| `br_number` | int | Número da BR (ex: 116) |
+| `road` | string | Nome da rodovia (ex: SP-330) |
 | `km` | float | Quilômetro do trecho |
 | `lat` | float (query, opcional) | Latitude para contexto |
 | `lon` | float (query, opcional) | Longitude para contexto |
 
-**Cache:** Redis TTL 1 hora por chave `prediction:br{N}:km{K}`
+**Cache:** Redis TTL 1 hora por chave `prediction:{road}:km:{km}`
 
 ```bash
-curl http://localhost:8000/risk/br/116/km/225
+curl http://localhost:8000/risk/SP-330/km/150
 ```
 
 ```json
 {
-  "br": 116,
-  "km": 225.0,
+  "road": "SP-330",
+  "km": 150.0,
   "risk_score": 2,
   "risk_label": "Alto",
   "confidence": 0.6714,
   "active_occurrences": 0,
-  "weather_condition": "Não disponível",
-  "timestamp": "2026-05-31T20:00:00"
+  "timestamp": "2026-06-09T12:00:00"
 }
 ```
 
@@ -350,13 +387,12 @@ Lista ocorrências ativas coletadas pelo scraper ARTESP.
 
 | Parâmetro | Tipo | Padrão | Descrição |
 |---|---|---|---|
-| `uf` | string | — | Filtro por UF (ex: SP) |
 | `road` | string | — | Filtro por nome de rodovia |
-| `min_criticality` | int | 1 | Criticidade mínima (1–4) |
+| `min_risk_score` | int | 0 | Score de risco mínimo (0–3) |
 | `limit` | int | 50 | Máximo de resultados (até 200) |
 
 ```bash
-curl "http://localhost:8000/occurrences?min_criticality=3&limit=10"
+curl "http://localhost:8000/occurrences?min_risk_score=2&limit=10"
 ```
 
 ```json
@@ -366,8 +402,14 @@ curl "http://localhost:8000/occurrences?min_criticality=3&limit=10"
     {
       "road": "SP-070",
       "km": 45.2,
-      "criticality": 4,
-      "narrative": "Acidente com vítimas fatais..."
+      "risk_score": 3,
+      "risk_label": "Crítico",
+      "occurrence_types": ["Acidente com vítimas", "Bloqueio"],
+      "concessionaire": "Ecopistas",
+      "municipio": "Guarulhos",
+      "narrative": "Acidente com vítimas fatais...",
+      "status": "Ativo",
+      "collected_at": "2026-06-09T12:00:00"
     }
   ]
 }
@@ -383,17 +425,17 @@ Calcula e compara a rota mais segura com a rota direta.
 curl -X POST http://localhost:8000/route/optimize \
   -H "Content-Type: application/json" \
   -d '{
-    "origin":      {"br": 116, "km": 200},
-    "destination": {"br": 116, "km": 300}
+    "origin":      {"road": "SP-330", "km": 200},
+    "destination": {"road": "SP-330", "km": 300}
   }'
 ```
 
 ```json
 {
-  "origin":      {"br": 116, "km": 200},
-  "destination": {"br": 116, "km": 300},
+  "origin":      {"road": "SP-330", "km": 200},
+  "destination": {"road": "SP-330", "km": 300},
   "safe_route": {
-    "nodes": [{"br": 116, "km": 200}, "..."],
+    "nodes": [{"road": "SP-330", "km": 200}, "..."],
     "total_distance_km": 108.5,
     "max_risk_score": 1,
     "avg_risk_score": 0.4,
@@ -431,7 +473,7 @@ docker exec -it streetsat-postgres psql -U streetsat -d streetsat_db
 
 ### Redis (:6380 → 6379)
 
-Cache de predições (`prediction:br{N}:km{K}`) com TTL configurável (padrão 1h). Container: `streetsat-redis`.
+Cache de predições (`prediction:{road}:km:{km}`) com TTL configurável (padrão 1h). Container: `streetsat-redis`.
 
 ```env
 REDIS_URL=redis://localhost:6380
@@ -442,7 +484,7 @@ Inspecionar cache:
 ```bash
 docker exec -it streetsat-redis redis-cli
 > KEYS prediction:*
-> GET prediction:br116:km225
+> GET prediction:SP-330:km:150
 ```
 
 ### MongoDB (:27017)
@@ -519,29 +561,90 @@ curl http://localhost:4566/_localstack/health
 
 Após os containers subirem (`docker-compose up -d`), inicialize os bancos:
 
-**PostgreSQL — criar tabelas base:**
+**PostgreSQL — criar tabelas:**
+
+As tabelas são definidas em `src/db/postgres.py` (SQLAlchemy ORM) e criadas automaticamente na inicialização da API via `create_tables()`. Para criá-las manualmente:
+
 ```bash
 # Acessar o container
 docker exec -it streetsat-postgres psql -U streetsat -d streetsat_db
 
 # Criar tabelas (cole dentro do psql)
-CREATE TABLE IF NOT EXISTS inference_logs (
-    id          SERIAL PRIMARY KEY,
-    br          INTEGER NOT NULL,
-    km          FLOAT NOT NULL,
-    risk_score  INTEGER NOT NULL,
-    confidence  FLOAT,
-    created_at  TIMESTAMP DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS occurrences_realtime (
+    occurrence_id      VARCHAR(20) PRIMARY KEY,
+    road               VARCHAR(30),
+    km                 FLOAT,
+    municipio          VARCHAR(100),
+    city               VARCHAR(100),
+    state              VARCHAR(10),
+    occurrence_type    VARCHAR(80),
+    occurrence_subtype VARCHAR(80) DEFAULT '',
+    occurrence_types   JSONB,
+    concessionaire     VARCHAR(100),
+    direction          VARCHAR(20),
+    interdiction_level INTEGER DEFAULT 0,
+    interdiction_label VARCHAR(100) DEFAULT '',
+    criticality        INTEGER DEFAULT 1,
+    criticality_label  VARCHAR(20) DEFAULT '',
+    victims            JSONB,
+    victims_total      INTEGER DEFAULT 0,
+    narrative          TEXT,
+    status             VARCHAR(50) DEFAULT 'Ativa',
+    status_timestamp   VARCHAR(20) DEFAULT '',
+    detected_at        TIMESTAMP DEFAULT NOW(),
+    update_timestamp   VARCHAR(20) DEFAULT '',
+    mits_id            INTEGER,
+    weather_condition  VARCHAR(100) DEFAULT '',
+    roadway            VARCHAR(50) DEFAULT '',
+    lanes              VARCHAR(50) DEFAULT '',
+    signaling          VARCHAR(100) DEFAULT '',
+    latitude           FLOAT,
+    longitude          FLOAT,
+    nlp_entities       JSONB,
+    nlp_sentiment      VARCHAR(20),
+    risk_score         INTEGER,
+    created_at         TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS occurrences (
-    id          SERIAL PRIMARY KEY,
-    road        TEXT,
-    km          FLOAT,
-    criticality INTEGER,
-    narrative   TEXT,
-    collected_at TIMESTAMP DEFAULT NOW()
+CREATE INDEX IF NOT EXISTS idx_occurrences_risk_score ON occurrences_realtime (risk_score);
+CREATE INDEX IF NOT EXISTS idx_occurrences_road ON occurrences_realtime (road);
+CREATE INDEX IF NOT EXISTS idx_occurrences_criticality ON occurrences_realtime (criticality);
+CREATE INDEX IF NOT EXISTS idx_occurrences_city ON occurrences_realtime (city);
+CREATE INDEX IF NOT EXISTS idx_occurrences_detected_at ON occurrences_realtime (detected_at);
+
+CREATE TABLE IF NOT EXISTS predictions_cache (
+    id                   BIGSERIAL PRIMARY KEY,
+    road                 VARCHAR(30),
+    km                   FLOAT,
+    predicted_risk_score INTEGER,
+    confidence           FLOAT,
+    model_version        VARCHAR(20),
+    created_at           TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id             BIGSERIAL PRIMARY KEY,
+    alert_id       VARCHAR(50) UNIQUE,
+    occurrence_id  VARCHAR(20),
+    road           VARCHAR(30),
+    km             FLOAT,
+    municipio      VARCHAR(100),
+    risk_score     INTEGER,
+    message        TEXT,
+    sent           BOOLEAN DEFAULT FALSE,
+    created_at     TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS heatmap_data (
+    id             BIGSERIAL PRIMARY KEY,
+    day_of_week    INTEGER NOT NULL,
+    hour           INTEGER NOT NULL,
+    count          INTEGER DEFAULT 0,
+    avg_risk       FLOAT DEFAULT 0.0,
+    updated_at     TIMESTAMP DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_heatmap_day_hour ON heatmap_data (day_of_week, hour);
 
 \q
 ```
@@ -596,8 +699,8 @@ Isso copia os três arquivos de `models/` para `s3://streetsat-models-dev/models
 
 | Arquivo | Tamanho | Uso |
 |---|---|---|
-| `modelo_rf.pkl` | 275 MB | Pipeline Random Forest serializado |
-| `encoders.pkl` | 50 KB | LabelEncoders das features categóricas |
+| `modelo_rf.pkl` | 397 KB | Pipeline Random Forest serializado |
+| `encoders.pkl` | 24 KB | LabelEncoders das features categóricas |
 | `model_metadata.json` | 2 KB | Métricas, hiperparâmetros, feature importance |
 
 > **DeletionPolicy: Retain** — o bucket sobrevive ao `sls-reset-local`, mas o conteúdo
@@ -617,7 +720,7 @@ O `serverless.yml` define 4 Lambdas:
 
 **Modelo ML no S3 (cold start automático):**
 
-O `modelo_rf.pkl` tem 275 MB e não cabe no ZIP de deploy (limite Lambda: 250 MB descomprimido). O Lambda `inference` resolve isso fazendo download automático do S3 na primeira execução:
+O `modelo_rf.pkl` tem 397 KB e cabe no ZIP de deploy. O Lambda `inference` carrega do S3 na primeira execução:
 
 ```
 Cold start do Lambda inference:
@@ -672,7 +775,7 @@ make sls-deploy-local
 ```
 
 > **Primeira execução:** o Serverless empacota as dependências de `requirements-lambda.txt`
-> no ZIP da Lambda (**77 MB comprimido / 247 MB descomprimido**, ~1–2 min). O `requirements-lambda.txt`
+> no ZIP da Lambda (~2 min). O `requirements-lambda.txt`
 > contém apenas os pacotes necessários pelos handlers — sem visualização, BD ou infraestrutura.
 > Com `useStaticCache: true`, redeployos subsequentes são instantâneos; o rebuild só ocorre
 > quando `requirements-lambda.txt` mudar.
@@ -731,8 +834,7 @@ make sls-deploy-local
 ```
 
 > **Tamanho do ZIP:** o `requirements-lambda.txt` lista apenas os pacotes necessários
-> pelos handlers Lambda (sem pacotes de visualização, BD, ou infraestrutura). ZIP atual:
-> **77MB comprimido / 247MB descomprimido** (limite AWS: 250MB).
+> pelos handlers Lambda (sem pacotes de visualização, BD, ou infraestrutura).
 
 ### Monitoramento do pipeline local
 
@@ -864,8 +966,7 @@ SQS_ALERTS_QUEUE_URL=
 USE_LOCALSTACK=true
 
 # APIs externas
-NASA_API_KEY=DEMO_KEY        # https://api.nasa.gov (gratuito)
-FIRMS_MAP_KEY=               # https://firms.modaps.eosdis.nasa.gov/api
+NASA_API_KEY=DEMO_KEY        # https://api.nasa.gov (necessária para EONET)
 
 # NLP
 COMPREHEND_ENABLED=false     # true para usar AWS Comprehend real
@@ -896,7 +997,7 @@ cp .env.example .env.local
 # 4. Subir bancos via Docker (apenas infraestrutura)
 docker-compose up -d postgres redis mongodb localstack
 
-# 5. Treinar o modelo (requer CSVs PRF em data/prf/)
+# 5. Treinar o modelo (requer data/ccm-artesp/ccm-artesp.csv)
 make train
 
 # 6. Subir a API
@@ -986,7 +1087,7 @@ pytest tests/test_inference.py -v
 make lint
 ```
 
-**22 testes unitários** cobrem: inferência ML, scoring NLP, construção do grafo, roteamento Dijkstra, feature engineering e carregamento de dados PRF.
+**48 testes unitários** cobrem: inferência ML, scoring NLP, construção do grafo, roteamento Dijkstra, feature engineering, scrapers, loaders e API.
 
 ---
 
@@ -1000,9 +1101,9 @@ streetsat/
 │   │   ├── constants.py       # Labels, penalidades, features, keywords NLP
 │   │   └── exceptions.py      # Exceções customizadas
 │   ├── data/
-│   │   ├── prf_loader.py      # Lê CSVs PRF (latin-1, sep=;)
+│   │   ├── artesp_loader.py   # Lê CSV ARTESP (utf-8-sig, sep=;)
 │   │   ├── data_cleaner.py    # Limpeza e normalização
-│   │   └── feature_engineering.py  # 14 features + label de risco
+│   │   └── feature_engineering.py  # 15 features + label de risco
 │   ├── ml/
 │   │   ├── inference.py       # RiskPredictor singleton + predict_segment
 │   │   └── scoring.py         # enrich_score_with_nlp
@@ -1015,19 +1116,19 @@ streetsat/
 │   ├── api/
 │   │   ├── fastapi_app.py     # App principal + Mangum handler Lambda
 │   │   └── routes/
-│   │       ├── risk_routes.py         # GET /risk/br/{br}/km/{km}
+│   │       ├── risk_routes.py         # GET /risk/{road}/km/{km}
 │   │       ├── occurrences_routes.py  # GET /occurrences
 │   │       └── route_routes.py        # POST /route/optimize
 │   ├── apis/
-│   │   ├── nasa_power.py      # Dados climáticos
-│   │   ├── nasa_eonet.py      # Eventos naturais
-│   │   └── nasa_firms.py      # Focos de incêndio
+│   │   ├── nasa_eonet.py      # Eventos naturais NASA
+│   │   └── weather.py         # Clima Open-Meteo / CPTEC
 │   ├── scrapers/
 │   │   └── artesp_scraper.py  # Ocorrências ARTESP em tempo real
 │   ├── alerts/
 │   │   ├── alert_factory.py   # Cria payload de alerta
 │   │   └── sns_notifier.py    # Publica no SNS
 │   ├── db/
+│   │   ├── models.py          # SQLAlchemy ORM models
 │   │   ├── postgres.py        # SQLAlchemy engine
 │   │   └── redis_client.py    # cache_get / cache_set
 │   └── utils/
@@ -1048,9 +1149,9 @@ streetsat/
 │   ├── collect_realtime.py    # Coleta dados em tempo real
 │   ├── demo_nlp.py            # Demo do pipeline NLP
 │   └── demo_inference.py      # Demo de inferência + roteamento
-├── tests/                     # 22 testes unitários (pytest)
-├── docs/
-│   └── prf/                   # CSVs PRF (não versionados)
+├── tests/                     # 48 testes unitários (pytest)
+├── data/
+│   └── ccm-artesp/            # CSV ARTESP (não versionado)
 ├── Dockerfile                 # Imagem da API Python
 ├── docker-compose.yml         # Todos os serviços
 ├── serverless.yml             # Definição das Lambdas

@@ -13,7 +13,7 @@ class PredictionResult(BaseModel):
 
 
 class PredictionResponse(BaseModel):
-    br: int
+    road: str
     km: float
     risk_score: int
     risk_label: str
@@ -30,7 +30,7 @@ class RouteRequest(BaseModel):
 
 
 class RouteSegment(BaseModel):
-    br: int
+    road: str
     km_start: float
     km_end: float
     risk_score: int

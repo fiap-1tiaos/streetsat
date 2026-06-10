@@ -9,8 +9,8 @@ const steps = [
     num: '01',
     Icon: Satellite,
     title: 'Coleta',
-    desc: 'Dados de acidentes PRF, ocorrências ARTESP, clima NASA e focos de incêndio via APIs e scraping em tempo real.',
-    techs: ['PRF CSV', 'NASA POWER', 'ARTESP'],
+    desc: 'Dados de ocorrências CCM-ARTESP combinados com eventos naturais (NASA EONET) e condições climáticas via API pública em tempo real.',
+    techs: ['CCM-ARTESP', 'NASA EONET', 'Open-Meteo Weather'],
     color: '#00d4ff',
   },
   {

@@ -1,14 +1,6 @@
-const HOURS = Array.from({ length: 24 }, (_, i) => `${i}h`)
-const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-
-// Simulated accident intensity data (day × hour)
-const INTENSITY: number[][] = DAYS.map((_, d) =>
-  HOURS.map((_, h) => {
-    const peak = d >= 1 && d <= 5 ? (h >= 7 && h <= 9) || (h >= 17 && h <= 19) : h >= 11 && h <= 16
-    const base = peak ? 0.5 + Math.random() * 0.5 : Math.random() * 0.4
-    return base
-  })
-)
+import { useCallback } from 'react'
+import { useRealtime } from '@/hooks/useRealtime'
+import { api, type HeatmapResponse } from '@/lib/api'
 
 function interpolateColor(t: number): string {
   const r = Math.round(34 + (239 - 34) * t)
@@ -18,35 +10,55 @@ function interpolateColor(t: number): string {
 }
 
 export function HeatmapChart() {
+  const fetcher = useCallback(() => api.fetchHeatmap(), [])
+  const { data, loading, error } = useRealtime<HeatmapResponse>({ fetcher, intervalMs: 300_000 })
+
+  if (loading && !data) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#475569', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.8rem' }}>
+        Carregando...
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#475569', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.8rem' }}>
+        Dados indisponíveis
+      </div>
+    )
+  }
+
+  const maxCount = Math.max(...data.matrix.flat().map((c) => c.count), 1)
   const cellW = 32
   const cellH = 22
 
   return (
     <div style={{ overflowX: 'auto' }}>
       <div style={{ display: 'flex', gap: '2px', alignItems: 'center', marginBottom: '4px', paddingLeft: '32px' }}>
-        {HOURS.map((h) => (
+        {data.hours.map((h) => (
           <div key={h} style={{ width: cellW, textAlign: 'center', fontSize: '9px', color: '#475569', fontFamily: 'JetBrains Mono, monospace', flexShrink: 0 }}>
             {h}
           </div>
         ))}
       </div>
-      {DAYS.map((day, d) => (
+      {data.days.map((day, d) => (
         <div key={day} style={{ display: 'flex', gap: '2px', alignItems: 'center', marginBottom: '2px' }}>
           <div style={{ width: 30, fontSize: '10px', color: '#64748b', fontFamily: 'Inter, sans-serif', flexShrink: 0, textAlign: 'right', paddingRight: '4px' }}>
             {day}
           </div>
-          {HOURS.map((_, h) => {
-            const val = INTENSITY[d][h]
+          {data.matrix[d].map((cell, h) => {
+            const intensity = cell.count / maxCount
             return (
               <div
                 key={h}
-                title={`${day} ${h}h — ${(val * 100).toFixed(0)}% de intensidade`}
+                title={`${day} ${data.hours[h]} — ${cell.count} ocorrências, risco médio ${cell.avg_risk.toFixed(1)}`}
                 style={{
                   width: cellW,
                   height: cellH,
                   borderRadius: '3px',
-                  background: interpolateColor(val),
-                  opacity: 0.15 + val * 0.85,
+                  background: interpolateColor(intensity),
+                  opacity: 0.15 + intensity * 0.85,
                   flexShrink: 0,
                   cursor: 'default',
                   transition: 'opacity 0.2s',

@@ -49,7 +49,8 @@ def train(X: pd.DataFrame, y: pd.Series, models_dir: Path) -> tuple[Pipeline, di
 
     acc = accuracy_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred, average="macro")
-    report = classification_report(y_test, y_pred, target_names=[RISK_LABELS[i] for i in range(4)])
+    labels = sorted(np.unique(y_test))
+    report = classification_report(y_test, y_pred, labels=labels, target_names=[RISK_LABELS[i] for i in labels])
     cm = confusion_matrix(y_test, y_pred).tolist()
 
     log.info("Acurácia: %.4f | F1-macro: %.4f", acc, f1)

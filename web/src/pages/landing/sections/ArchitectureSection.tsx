@@ -8,11 +8,11 @@ const layers = [
     num: '01',
     title: 'Scoring ML',
     tech: 'Random Forest · scikit-learn · joblib',
-    desc: 'Classifica cada trecho em 4 níveis de risco usando 14 features extraídas de histórico PRF, clima e contexto viário.',
+    desc: 'Classifica cada trecho em 4 níveis de risco usando 21 features: dados de ocorrências ARTESP, eventos naturais EONET (NASA) e condições climáticas em tempo real.',
     color: '#22c55e',
     bg: 'rgba(34,197,94,0.06)',
     border: 'rgba(34,197,94,0.2)',
-    features: ['96.000+ registros de treino', '14 features de risco', '4 classes de severidade'],
+    features: ['18.000+ ocorrências de treino', '21 features (ARTESP + NASA + clima)', '4 classes de severidade'],
   },
   {
     num: '02',

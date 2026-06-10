@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.apis.nasa_eonet import NASAEONETClient
-from src.apis.nasa_power import NASAPowerClient
+from src.apis.weather import WeatherClient
 from src.core.config import DATA_DIR
 from src.scrapers.artesp_scraper import ARTESPScraper
 from src.utils.logger import get_logger
@@ -35,10 +35,24 @@ def main():
     except Exception as e:
         log.error("EONET falhou: %s", e)
 
+    weather_data = {}
+    try:
+        weather = WeatherClient()
+        # Coleta clima para SP-330 km 150 como amostra
+        weather_data = weather.get_weather(lat=-22.5, lon=-47.5)
+        log.info("Clima: temp=%.1f°C, precip=%.1fmm, vento=%.1fm/s, umid=%d%%",
+                 weather_data.get("temperature_c", 0),
+                 weather_data.get("precipitation_mm", 0),
+                 weather_data.get("wind_speed_ms", 0),
+                 weather_data.get("humidity", 0))
+    except Exception as e:
+        log.error("Clima falhou: %s", e)
+
     payload = {
         "collected_at": t0.isoformat(),
         "occurrences": occurrences,
         "eonet_events": eonet_events,
+        "weather": weather_data,
         "duration_seconds": round((datetime.now() - t0).total_seconds(), 1),
     }
 

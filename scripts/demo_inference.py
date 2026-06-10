@@ -10,11 +10,11 @@ from src.routing.graph_builder import build_graph
 from src.routing.path_optimizer import compare_routes, find_nearest_node
 
 SEGMENTS = [
-    (116, 225.0, {"occurrences": [], "weather": {"precipitation_mm": 0}}),
-    (116, 226.0, {"occurrences": [{"narrative": "Acidente com feridos graves. Bloqueio parcial."}], "weather": {"precipitation_mm": 15}}),
-    (116, 230.0, {"occurrences": [{"narrative": "Tombamento com morte. Bloqueio total."}], "weather": {"precipitation_mm": 30}}),
-    (116, 250.0, {"occurrences": [], "weather": {"precipitation_mm": 0}}),
-    (381, 100.0, {"occurrences": [], "weather": {"precipitation_mm": 0}}),
+    ("SP-330", 100.0, {"occurrences": [], "weather": {"precipitation_mm": 0}}),
+    ("SP-330", 105.0, {"occurrences": [{"narrative": "Acidente com feridos graves. Bloqueio parcial."}], "weather": {"precipitation_mm": 15}}),
+    ("SP-330", 110.0, {"occurrences": [{"narrative": "Tombamento com morte. Bloqueio total."}], "weather": {"precipitation_mm": 30}}),
+    ("SP-330", 150.0, {"occurrences": [], "weather": {"precipitation_mm": 0}}),
+    ("SP-310", 200.0, {"occurrences": [], "weather": {"precipitation_mm": 0}}),
 ]
 
 
@@ -24,36 +24,35 @@ def main():
     print("\n" + "═" * 70)
     print("STREETSAT — Demo de Inferência de Risco")
     print("═" * 70)
-    print(f"\n{'BR':<6} {'KM':<8} {'Score':<8} {'Label':<12} {'Confiança'}")
+    print(f"\n{'ROAD':<8} {'KM':<8} {'Score':<8} {'Label':<12} {'Confiança'}")
     print("─" * 50)
 
     results = []
-    for br, km, context in SEGMENTS:
+    for road, km, context in SEGMENTS:
         try:
-            result = predictor.predict_segment(br=br, km=km, context=context)
-            print(f"BR-{br:<4} {km:<8.1f} {result.score:<8} {result.risk_label:<12} {result.confidence:.1%}")
-            results.append((br, km, result.score))
+            result = predictor.predict_segment(road=road, km=km, context=context)
+            print(f"{road:<8} {km:<8.1f} {result.score:<8} {result.risk_label:<12} {result.confidence:.1%}")
+            results.append((road, km, result.score))
         except Exception as e:
-            print(f"BR-{br:<4} {km:<8.1f} ERRO: {e}")
+            print(f"{road:<8} {km:<8.1f} ERRO: {e}")
 
-    # Demo roteamento
     print("\n" + "─" * 70)
-    print("ROTEAMENTO ADAPTATIVO: BR-116 KM 225 → KM 250")
+    print("ROTEAMENTO ADAPTATIVO: SP-330 KM 100 → KM 150")
     print("─" * 70)
 
     graph_segments = [
-        {"br": 116, "km_start": 220, "km_end": 226, "lat_start": -23.48, "lon_start": -46.54,
+        {"road": "SP-330", "km_start": 100, "km_end": 105, "lat_start": -23.48, "lon_start": -46.54,
          "lat_end": -23.45, "lon_end": -46.54, "risk_score": 0},
-        {"br": 116, "km_start": 226, "km_end": 230, "lat_start": -23.45, "lon_start": -46.54,
+        {"road": "SP-330", "km_start": 105, "km_end": 110, "lat_start": -23.45, "lon_start": -46.54,
          "lat_end": -23.42, "lon_end": -46.54, "risk_score": 2},
-        {"br": 116, "km_start": 230, "km_end": 240, "lat_start": -23.42, "lon_start": -46.54,
+        {"road": "SP-330", "km_start": 110, "km_end": 130, "lat_start": -23.42, "lon_start": -46.54,
          "lat_end": -23.38, "lon_end": -46.54, "risk_score": 3},
-        {"br": 116, "km_start": 240, "km_end": 250, "lat_start": -23.38, "lon_start": -46.54,
+        {"road": "SP-330", "km_start": 130, "km_end": 150, "lat_start": -23.38, "lon_start": -46.54,
          "lat_end": -23.35, "lon_end": -46.54, "risk_score": 1},
     ]
     G = build_graph(graph_segments)
-    origin = find_nearest_node(G, 116, 225.0)
-    dest = find_nearest_node(G, 116, 250.0)
+    origin = find_nearest_node(G, "SP-330", 100.0)
+    dest = find_nearest_node(G, "SP-330", 150.0)
 
     if origin and dest:
         try:

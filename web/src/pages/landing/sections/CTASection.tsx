@@ -81,7 +81,7 @@ export function CTASection() {
             variants={fadeUp}
             className="text-slate-700 text-sm font-mono"
           >
-            96.000 acidentes analisados · 847 rodovias · PRF 2025–2026
+            18.000+ ocorrências analisadas · 160+ rodovias · CCM-ARTESP 2026
           </motion.p>
         </motion.div>
       </div>

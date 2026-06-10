@@ -1,83 +1,56 @@
-import networkx as nx
-
 from src.core.constants import RISK_PENALTY
-from src.utils.geo_utils import haversine_km
 from src.utils.logger import get_logger
+import networkx as nx
+from geopy.distance import geodesic
 
 log = get_logger(__name__)
 
 
 def build_graph(segments: list[dict]) -> nx.Graph:
     G = nx.Graph()
+
     for seg in segments:
-        br = seg.get("br", 0)
-        km_s = float(seg.get("km_start", 0))
-        km_e = float(seg.get("km_end", km_s + 10))
-        lat_s = float(seg.get("lat_start", -15.0))
-        lon_s = float(seg.get("lon_start", -50.0))
-        lat_e = float(seg.get("lat_end", lat_s))
-        lon_e = float(seg.get("lon_end", lon_s))
-        risk = int(seg.get("risk_score", 0))
+        road = str(seg["road"])
+        km_start = float(seg["km_start"])
+        km_end = float(seg["km_end"])
 
-        node_s = (int(br), int(km_s))
-        node_e = (int(br), int(km_e))
+        node_a = (road, km_start)
+        node_b = (road, km_end)
 
-        G.add_node(node_s, lat=lat_s, lon=lon_s, br=br)
-        G.add_node(node_e, lat=lat_e, lon=lon_e, br=br)
+        G.add_node(node_a, lat=seg.get("lat_start"), lon=seg.get("lon_start"))
+        G.add_node(node_b, lat=seg.get("lat_end"), lon=seg.get("lon_end"))
 
-        dist = haversine_km(lat_s, lon_s, lat_e, lon_e)
-        if dist == 0:
-            dist = abs(km_e - km_s)
+        lat_start = seg.get("lat_start")
+        lon_start = seg.get("lon_start")
+        lat_end = seg.get("lat_end")
+        lon_end = seg.get("lon_end")
 
-        weight = dist * (1 + RISK_PENALTY[risk])
+        distance_km = 0
+        if lat_start is not None and lon_start is not None and lat_end is not None and lon_end is not None:
+            distance_km = geodesic((lat_start, lon_start), (lat_end, lon_end)).km
 
-        G.add_edge(node_s, node_e, distance_km=dist, risk_score=risk, weight=weight, travel_time_min=dist * 1.2)
+        risk_score = int(seg.get("risk_score", 0))
+        weight = distance_km * (1 + RISK_PENALTY.get(risk_score, 0))
+
+        travel_time_min = distance_km / 80 * 60
+
+        G.add_edge(
+            node_a, node_b,
+            distance_km=distance_km,
+            risk_score=risk_score,
+            weight=weight,
+            travel_time_min=travel_time_min,
+        )
 
     log.info("Grafo construído: %d nós, %d arestas", G.number_of_nodes(), G.number_of_edges())
     return G
 
 
-def update_edge_weights(G: nx.Graph, risk_scores: dict) -> nx.Graph:
-    for (u, v, data) in G.edges(data=True):
+def update_edge_weights(G, risk_scores: dict):
+    for u, v, data in G.edges(data=True):
         key = f"{u[0]}:{u[1]}-{v[1]}"
         if key in risk_scores:
-            risk = risk_scores[key]
-            data["risk_score"] = risk
-            data["weight"] = data["distance_km"] * (1 + RISK_PENALTY[risk])
-    return G
-
-
-def build_graph_from_prf(df) -> nx.Graph:
-    """Constrói grafo a partir do DataFrame PRF agrupando por BR e KM."""
-    import pandas as pd
-    segments = []
-    for br_num, group in df.groupby("br"):
-        group_sorted = group.sort_values("km")
-        kms = group_sorted["km"].dropna().unique()
-        kms.sort()
-        for i in range(len(kms) - 1):
-            km_s = kms[i]
-            km_e = kms[i + 1]
-            slice_ = group_sorted[
-                (group_sorted["km"] >= km_s) & (group_sorted["km"] < km_e)
-            ]
-            if slice_.empty:
-                continue
-            lat_s = slice_["latitude"].iloc[0] if "latitude" in slice_.columns else -15.0
-            lon_s = slice_["longitude"].iloc[0] if "longitude" in slice_.columns else -50.0
-            lat_e = slice_["latitude"].iloc[-1] if "latitude" in slice_.columns else lat_s
-            lon_e = slice_["longitude"].iloc[-1] if "longitude" in slice_.columns else lon_s
-            risk = 0
-            if "risk_label" in slice_.columns:
-                risk = int(slice_["risk_label"].max())
-            segments.append({
-                "br": int(br_num),
-                "km_start": float(km_s),
-                "km_end": float(km_e),
-                "lat_start": float(lat_s),
-                "lon_start": float(lon_s),
-                "lat_end": float(lat_e),
-                "lon_end": float(lon_e),
-                "risk_score": risk,
-            })
-    return build_graph(segments)
+            data["risk_score"] = risk_scores[key]
+            base_dist = data.get("distance_km", 1)
+            data["weight"] = base_dist * (1 + RISK_PENALTY.get(risk_scores[key], 0))
+    log.info("Pesos atualizados para %d arestas", len(risk_scores))

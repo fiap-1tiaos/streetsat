@@ -100,7 +100,7 @@ export function HeroSection() {
           className="text-slate-400 max-w-[600px] mx-auto mb-6 leading-relaxed"
           style={{ fontSize: 'clamp(1rem, 2vw, 1.15rem)' }}
         >
-          Sistema de análise de risco em rodovias brasileiras com{' '}
+           Sistema de análise de risco em rodovias paulistas com{' '}
           <span className="text-slate-200">Random Forest</span>,{' '}
           <span className="text-slate-200">AWS Comprehend</span> e roteamento{' '}
           <span className="text-slate-200">Dijkstra</span> para trajetos mais seguros.
@@ -117,8 +117,6 @@ export function HeroSection() {
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
             <span className="text-slate-500">sistema online</span>
           </span>
-          <span className="text-slate-700">·</span>
-          <span className="text-slate-500">96k registros PRF</span>
           <span className="text-slate-700">·</span>
           <span className="text-slate-500">4 níveis de risco</span>
         </motion.div>

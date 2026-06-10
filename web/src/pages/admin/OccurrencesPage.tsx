@@ -3,38 +3,43 @@ import { motion, AnimatePresence } from 'motion/react'
 import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel, getPaginationRowModel, flexRender, type ColumnDef, type SortingState } from '@tanstack/react-table'
 import { ChevronUp, ChevronDown, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useOccurrencesStore } from '@/stores/occurrencesStore'
-import { RISK_LABELS, RISK_COLORS, type Occurrence, timeAgo, type RiskScore } from '@/lib/utils'
+import { RISK_LABELS, RISK_COLORS, type Occurrence, timeAgo, formatDate, type RiskScore } from '@/lib/utils'
 
 export default function OccurrencesPage() {
   const { occurrences } = useOccurrencesStore()
   const [sorting, setSorting] = useState<SortingState>([])
   const [minScore, setMinScore] = useState<number>(0)
-  const [brFilter, setBrFilter] = useState('')
+  const [roadFilter, setRoadFilter] = useState('')
   const [selected, setSelected] = useState<Occurrence | null>(null)
 
   const filtered = useMemo(() =>
     occurrences.filter((o: Occurrence) =>
       o.risk_score >= minScore &&
-      (!brFilter || String(o.br).includes(brFilter))
+      (!roadFilter || o.road.includes(roadFilter))
     ),
-    [occurrences, minScore, brFilter]
+    [occurrences, minScore, roadFilter]
   )
 
   const columns = useMemo<ColumnDef<Occurrence>[]>(() => [
-    { accessorKey: 'id', header: 'ID', size: 100, cell: (c) => <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.8rem', color: '#64748b' }}>{c.getValue<string>()}</span> },
-    { accessorKey: 'br', header: 'BR', size: 70, cell: (c) => <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>BR-{c.getValue<number>()}</span> },
+    { accessorKey: 'occurrence_id', header: 'ID', size: 140, cell: (c) => <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.8rem', color: '#64748b' }}>{c.getValue<string>()}</span> },
+    { accessorKey: 'road', header: 'Rodovia', size: 90, cell: (c) => <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>{c.getValue<string>()}</span> },
     { accessorKey: 'km', header: 'KM', size: 70, cell: (c) => <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.85rem' }}>{c.getValue<number>()}</span> },
-    { accessorKey: 'municipio', header: 'Município', cell: (c) => `${c.getValue<string>()}/${c.row.original.uf}` },
-    { accessorKey: 'tipo', header: 'Tipo', cell: (c) => <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{c.getValue<string>()}</span> },
+    { accessorKey: 'municipio', header: 'Município', cell: (c) => `${c.getValue<string>()}/${c.row.original.state}` },
+    { accessorKey: 'occurrence_type', header: 'Tipo', cell: (c) => <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{c.getValue<string>()}</span> },
     {
-      accessorKey: 'interdicao',
+      accessorKey: 'interdiction_level',
       header: 'Interdição',
       size: 90,
-      cell: (c) => (
-        <span style={{ fontSize: '0.75rem', color: c.getValue<boolean>() ? '#ef4444' : '#64748b' }}>
-          {c.getValue<boolean>() ? 'Sim' : 'Não'}
-        </span>
-      ),
+      cell: (c) => {
+        const level = c.getValue<number>()
+        const label = ['Livre', 'Parcial', 'Total'][level] ?? 'Livre'
+        const color = level === 0 ? '#64748b' : level === 1 ? '#f59e0b' : '#ef4444'
+        return (
+          <span style={{ fontSize: '0.75rem', color }}>
+            {label}
+          </span>
+        )
+      },
     },
     {
       accessorKey: 'risk_score',
@@ -68,9 +73,15 @@ export default function OccurrencesPage() {
       cell: (c) => <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{(c.getValue<string>() ?? '—')}</span>,
     },
     {
-      accessorKey: 'detectado_em',
+      accessorKey: 'detected_at',
       header: 'Detectado',
       cell: (c) => <span style={{ fontSize: '0.75rem', color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>{timeAgo(c.getValue<string>())}</span>,
+    },
+    {
+      accessorKey: 'detected_at',
+      header: 'Data',
+      size: 140,
+      cell: (c) => <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace' }}>{formatDate(c.getValue<string>())}</span>,
     },
   ], [])
 
@@ -115,9 +126,9 @@ export default function OccurrencesPage() {
         </div>
         <input
           type="text"
-          value={brFilter}
-          onChange={(e) => setBrFilter(e.target.value)}
-          placeholder="BR-..."
+          value={roadFilter}
+          onChange={(e) => setRoadFilter(e.target.value)}
+          placeholder="SP-..."
           style={{
             padding: '0.35rem 0.75rem',
             background: 'rgba(0,212,255,0.04)',
@@ -237,9 +248,9 @@ export default function OccurrencesPage() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
               <div>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.7rem', color: '#64748b', marginBottom: '0.25rem' }}>{selected.id}</div>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.7rem', color: '#64748b', marginBottom: '0.25rem' }}>{selected.occurrence_id}</div>
                 <h3 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 700, fontSize: '1.2rem', margin: 0 }}>
-                  BR-{selected.br} · km {selected.km}
+                  {selected.road} · km {selected.km}
                 </h3>
               </div>
               <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px' }}>
@@ -253,12 +264,12 @@ export default function OccurrencesPage() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {[
-                ['Município', `${selected.municipio}/${selected.uf}`],
-                ['Tipo de acidente', selected.tipo],
-                ['Interdição', selected.interdicao ? 'Sim' : 'Não'],
+                ['Município', `${selected.municipio}/${selected.state}`],
+                ['Tipo de acidente', selected.occurrence_type],
+                ['Interdição', ['Livre', 'Parcial', 'Total'][selected.interdiction_level] ?? 'Livre'],
                 ['Sentimento NLP', selected.nlp_sentiment ?? 'N/A'],
                 ['Boost NLP', selected.nlp_boost !== undefined ? `+${selected.nlp_boost}` : 'N/A'],
-                ['Detectado', timeAgo(selected.detectado_em)],
+                ['Detectado', timeAgo(selected.detected_at)],
               ].map(([label, value]) => (
                 <div key={label}>
                   <div style={{ fontSize: '0.65rem', color: '#475569', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.2rem' }}>{label}</div>
@@ -267,10 +278,10 @@ export default function OccurrencesPage() {
               ))}
             </div>
 
-            {selected.narrativa && (
+            {selected.narrative && (
               <div style={{ marginTop: '1.25rem', padding: '1rem', background: 'rgba(0,212,255,0.04)', border: '1px solid rgba(0,212,255,0.08)', borderRadius: '8px' }}>
                 <div style={{ fontSize: '0.65rem', color: '#475569', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>Narrativa</div>
-                <p style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.7, margin: 0, fontStyle: 'italic' }}>{selected.narrativa}</p>
+                <p style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.7, margin: 0, fontStyle: 'italic' }}>{selected.narrative}</p>
               </div>
             )}
 
@@ -278,8 +289,8 @@ export default function OccurrencesPage() {
             <div style={{ marginTop: '1.25rem' }}>
               <div style={{ fontSize: '0.65rem', color: '#475569', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>Timeline</div>
               {[
-                { label: 'Detectado', time: selected.detectado_em, color: '#f59e0b' },
-                { label: 'Atualizado', time: selected.detectado_em, color: '#00d4ff' },
+                { label: 'Detectado', time: selected.detected_at, color: '#f59e0b' },
+                { label: 'Atualizado', time: selected.detected_at, color: '#00d4ff' },
               ].map((step) => (
                 <div key={step.label} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: step.color, flexShrink: 0, marginTop: '4px' }} />

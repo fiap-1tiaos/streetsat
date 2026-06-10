@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router'
 const ods = [
   'ODS 8 · Trabalho Decente',
   'ODS 9 · Infraestrutura',
-  'ODS 11 · Cidades Sustentáveis',
-  'ODS 13 · Ação Climática',
+  'ODS 11 · Cidades Sustentáveis'
 ]
 
 const links = [
@@ -34,7 +33,11 @@ export function FooterSection() {
           {/* Logo + tagline */}
           <div>
             <div className="flex items-center gap-2 font-display font-bold text-xl mb-2">
-              <span>🛰️</span>
+              <img
+                src="/streetsat-logo.png"
+                alt="Streetsat"
+                style={{ height: '32px', width: 'auto'}}
+              />
               <span className="text-white">Street</span>
               <span className="text-[#00d4ff]">sat</span>
             </div>

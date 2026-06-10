@@ -18,19 +18,19 @@ lint:
 	flake8 src/ dashboard/ aws/ scripts/ --max-line-length=100 --ignore=E501,W503
 
 train:
-	python scripts/train_model.py
+	docker exec streetsat-api python scripts/train_model.py
 
 collect:
-	python scripts/collect_realtime.py
+	docker exec streetsat-api python scripts/collect_realtime.py
 
 api:
 	uvicorn src.api.fastapi_app:app --host 0.0.0.0 --port 8000 --reload
 
 dashboard:
-	python dashboard/app.py
+	docker exec streetsat-api python dashboard/app.py
 
 demo:
-	python scripts/demo_dashboard.py
+	docker exec streetsat-api python scripts/demo_dashboard.py
 
 docker-up:
 	docker-compose up -d
@@ -46,10 +46,10 @@ setup-env:
 	@echo "Edit .env.local with your credentials"
 
 demo-nlp:
-	python scripts/demo_nlp.py
+	docker exec streetsat-api python scripts/demo_nlp.py
 
 demo-inference:
-	python scripts/demo_inference.py
+	docker exec streetsat-api python scripts/demo_inference.py
 
 # Serverless / LocalStack
 sls-deploy:
@@ -98,6 +98,7 @@ sls-deploy-local:
 	npm install
 	$(MAKE) sls-reset-local
 	. venv/bin/activate && PYTHONPATH=$(PWD) serverless deploy --stage dev --force
+	$(MAKE) sls-upload-models
 
 # Sobe infraestrutura + deploya lambdas — pipeline roda automaticamente a partir daí
 sls-start-local:
@@ -153,6 +154,13 @@ sls-s3-status:
 	@echo "=== Arquivos em s3://streetsat-models-dev/raw/occurrences/ ==="
 	@aws --endpoint-url=http://localhost:4566 s3 ls \
 	  s3://streetsat-models-dev/raw/occurrences/ --recursive 2>/dev/null \
+	  || echo "  Bucket vazio ou não existe ainda"
+
+# Arquivos do modelo de treinamento no S3 (deve conter modelo_rf.pkl, encoders.pkl e model_metadata.json)
+sls-model-status:
+	@echo "=== Arquivos em s3://streetsat-models-dev/models/ ==="
+	@aws --endpoint-url=http://localhost:4566 s3 ls \
+	  s3://streetsat-models-dev/models/ --recursive 2>/dev/null \
 	  || echo "  Bucket vazio ou não existe ainda"
 
 # Última execução de cada lambda (CloudWatch Logs)

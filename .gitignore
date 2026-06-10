@@ -10,6 +10,14 @@ env/
 dist/
 build/
 .eggs/
+web/.aiox-core/
+web/.antigravity/
+web/.claude/
+web/.codex/
+web/.gemini/
+web/.github/
+web/.kimi/
+web/.cursor/
 
 # Env
 .env

@@ -1,8 +1,8 @@
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts'
 
 interface Metrics {
-  accuracy: number
-  f1_score: number
+  accuracy?: number
+  f1_score?: number
   precision_livre?: number
   precision_atencao?: number
   precision_alto?: number
@@ -17,11 +17,21 @@ export function ModelMetricsChart({ metrics }: Props) {
   const data = [
     { metric: 'Acurácia', value: Math.round((metrics.accuracy ?? 0) * 100) },
     { metric: 'F1-macro', value: Math.round((metrics.f1_score ?? 0) * 100) },
-    { metric: 'Livre', value: Math.round((metrics.precision_livre ?? 0.40) * 100) },
-    { metric: 'Atenção', value: Math.round((metrics.precision_atencao ?? 0.68) * 100) },
-    { metric: 'Alto', value: Math.round((metrics.precision_alto ?? 0.31) * 100) },
-    { metric: 'Crítico', value: Math.round((metrics.precision_critico ?? 0.30) * 100) },
+    { metric: 'Livre', value: Math.round((metrics.precision_livre ?? 0) * 100) },
+    { metric: 'Atenção', value: Math.round((metrics.precision_atencao ?? 0) * 100) },
+    { metric: 'Alto', value: Math.round((metrics.precision_alto ?? 0) * 100) },
+    { metric: 'Crítico', value: Math.round((metrics.precision_critico ?? 0) * 100) },
   ]
+
+  const hasData = data.some((d) => d.value > 0)
+
+  if (!hasData) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#475569', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.8rem' }}>
+        Dados reais indisponíveis
+      </div>
+    )
+  }
 
   return (
     <ResponsiveContainer width="100%" height={220}>

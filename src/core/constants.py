@@ -19,14 +19,13 @@ RISK_PENALTY = {
     3: 5.0,
 }
 
-BRAZIL_BOUNDS = {
-    "lat_min": -35.0,
-    "lat_max": 5.5,
-    "lon_min": -75.0,
-    "lon_max": -34.0,
+SP_BOUNDS = {
+    "lat_min": -25.5,
+    "lat_max": -19.5,
+    "lon_min": -53.0,
+    "lon_max": -44.0,
 }
 
-# Palavras-chave para NLP local
 CRITICAL_KEYWORDS = ["morto", "óbito", "vítima fatal", "faleceu", "morte", "fatal"]
 HIGH_KEYWORDS = ["ferido grave", "uti", "internado", "presos às ferragens", "resgate", "bombeiros"]
 MEDIUM_KEYWORDS = ["ferido leve", "socorrido", "atendimento médico", "ambulância"]
@@ -38,14 +37,29 @@ MODEL_FEATURES = [
     "day_of_week",
     "is_weekend",
     "month",
-    "br_number",
-    "km_bucket",
-    "cause_encoded",
-    "type_encoded",
-    "weather_encoded",
-    "day_phase_encoded",
-    "road_type_encoded",
-    "road_layout_encoded",
-    "land_use_encoded",
-    "uf_encoded",
+    "road_id_encoded",
+    "km_mid",
+    "class_encoded",
+    "subclass_encoded",
+    "accident_type_encoded",
+    "concessionaire_encoded",
+    "municipio_encoded",
+    "has_blockage",
+    "feridos_leves",
+    "feridos_graves",
+    "mortos",
+    "nearest_eonet_distance_km",
+    "has_nearby_eonet",
+    "precipitation_mm",
+    "wind_speed_ms",
+    "temperature_c",
+    "humidity",
 ]
+
+CATEGORICAL_COLS = {
+    "classe": "class_encoded",
+    "subclasse_ac": "subclass_encoded",
+    "tipo_ac": "accident_type_encoded",
+    "concessionaria": "concessionaire_encoded",
+    "municipio": "municipio_encoded",
+}

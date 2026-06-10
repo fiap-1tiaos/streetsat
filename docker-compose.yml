@@ -78,10 +78,14 @@ services:
       AWS_SECRET_ACCESS_KEY: test
       AWS_REGION: us-east-1
       S3_BUCKET: streetsat-models-dev
+      DATABASE_URL: postgresql+pg8000://streetsat:streetsat_dev@postgres:5432/streetsat_db
+      REDIS_URL: redis://redis:6379
     command: >
       sh -c "uvicorn src.api.fastapi_app:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./data:/app/data
     depends_on:
       postgres:
         condition: service_healthy

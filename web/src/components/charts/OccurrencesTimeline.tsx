@@ -16,7 +16,7 @@ export function OccurrencesTimeline({ occurrences }: Props) {
       const hourStart = now - (23 - i) * 3_600_000
       const hourEnd = hourStart + 3_600_000
       const inHour = occurrences.filter((o) => {
-        const t = new Date(o.detectado_em).getTime()
+        const t = new Date(o.detected_at).getTime()
         return t >= hourStart && t < hourEnd
       })
       const row: Record<string, unknown> = {

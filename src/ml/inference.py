@@ -1,5 +1,4 @@
 import json
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -7,16 +6,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.core.config import MODELS_DIR, S3_BUCKET, _IS_LAMBDA
+from src.core.config import MODELS_DIR
 from src.core.constants import MODEL_FEATURES, RISK_LABELS
-from src.core.exceptions import ModelNotFoundError
 from src.data.feature_engineering import load_encoders
+from src.data.road_encoder import RoadEncoder
 from src.ml.scoring import enrich_score_with_nlp, score_to_label
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
-
-_S3_MODEL_PREFIX = "models"
 
 
 @dataclass
@@ -37,6 +34,7 @@ class RiskPredictor:
         self._pipeline = None
         self._encoders = None
         self._metadata = {}
+        self._road_encoder = None
 
     def load_model(self, models_dir: Path | None = None) -> None:
         models_dir = models_dir or MODELS_DIR
@@ -45,10 +43,7 @@ class RiskPredictor:
         meta_path = models_dir / "model_metadata.json"
 
         if not model_path.exists():
-            if _IS_LAMBDA:
-                self._download_models_from_s3(models_dir)
-            if not model_path.exists():
-                raise ModelNotFoundError(f"Modelo não encontrado: {model_path}")
+            raise FileNotFoundError(f"Modelo não encontrado: {model_path}")
 
         import joblib
         self._pipeline = joblib.load(model_path)
@@ -56,10 +51,50 @@ class RiskPredictor:
 
         if enc_path.exists():
             self._encoders = load_encoders(enc_path)
+            self._road_encoder = RoadEncoder(self._encoders)
 
         if meta_path.exists():
             with open(meta_path) as f:
                 self._metadata = json.load(f)
+
+    def _encode_or_default(self, encoder_key: str, value: str) -> int:
+        if self._encoders is None:
+            return 0
+        le = self._encoders.get(encoder_key)
+        if le is None:
+            return 0
+        known = set(le.classes_)
+        if "desconhecido" not in known:
+            le.classes_ = np.append(le.classes_, "desconhecido")
+        clean = value if value in known else "desconhecido"
+        return int(le.transform([clean])[0])
+
+    def _features_from_occurrence(self, occurrence: dict) -> dict:
+        victims = occurrence.get("victims", {}) or {}
+        interdiction = occurrence.get("interdiction_level", 0)
+
+        types_list = occurrence.get("occurrence_types", []) or []
+        classe = types_list[0] if types_list else "desconhecido"
+
+        eonet_dist = occurrence.get("nearest_eonet_distance_km", -1)
+        try:
+            eonet_dist = float(eonet_dist)
+        except (ValueError, TypeError):
+            eonet_dist = -1
+
+        return {
+            "class_encoded": self._encode_or_default("classe", classe),
+            "subclass_encoded": self._encode_or_default("subclasse_ac", occurrence.get("occurrence_subtype", "")),
+            "accident_type_encoded": self._encode_or_default("tipo_ac", occurrence.get("occurrence_type", "")),
+            "concessionaire_encoded": self._encode_or_default("concessionaria", occurrence.get("concessionaire", "") or occurrence.get("concessionaria", "")),
+            "municipio_encoded": self._encode_or_default("municipio", occurrence.get("municipio", "") or occurrence.get("city", "")),
+            "has_blockage": 1 if interdiction and int(interdiction) > 0 else 0,
+            "feridos_leves": int(victims.get("feridos_leves", 0)),
+            "feridos_graves": int(victims.get("feridos_graves", 0)),
+            "mortos": int(victims.get("mortos", 0)),
+            "nearest_eonet_distance_km": eonet_dist,
+            "has_nearby_eonet": 1 if eonet_dist >= 0 else 0,
+        }
 
     def predict(self, features: dict) -> PredictionResult:
         if self._pipeline is None:
@@ -79,74 +114,64 @@ class RiskPredictor:
             model_version=self._metadata.get("version", "1.0.0"),
         )
 
-    def predict_segment(self, br: int, km: float, context: dict) -> PredictionResult:
+    def _weather_from_context(self, context: dict, lat: float | None, lon: float | None) -> dict:
+        if lat is not None and lon is not None:
+            try:
+                from src.apis.weather import WeatherClient
+                w = WeatherClient()
+                return w.get_current_weather(lat, lon)
+            except Exception:
+                pass
+        return {"temperature_c": 25, "humidity": 70, "precipitation_mm": 0, "wind_speed_ms": 0}
+
+    def predict_segment(self, road: str, km: float, context: dict | None = None) -> PredictionResult:
+        context = context or {}
         now = datetime.now()
+
+        road_id_encoded = 0
+        if self._road_encoder:
+            road_id_encoded = self._road_encoder.encode(road)
+
         features = {
             "hour": now.hour,
             "day_of_week": now.weekday(),
             "is_weekend": int(now.weekday() >= 5),
             "month": now.month,
-            "br_number": br,
-            "km_bucket": int(km // 10 * 10),
-            "cause_encoded": 0,
-            "type_encoded": 0,
-            "weather_encoded": self._weather_encode(context.get("weather", {})),
-            "day_phase_encoded": self._day_phase_encode(now.hour),
-            "road_type_encoded": 0,
-            "road_layout_encoded": 0,
-            "land_use_encoded": 0,
-            "uf_encoded": 0,
+            "road_id_encoded": road_id_encoded,
+            "km_mid": float(km),
+            "class_encoded": 0,
+            "subclass_encoded": 0,
+            "accident_type_encoded": 0,
+            "concessionaire_encoded": 0,
+            "municipio_encoded": 0,
+            "has_blockage": 0,
+            "feridos_leves": 0,
+            "feridos_graves": 0,
+            "mortos": 0,
+            "nearest_eonet_distance_km": -1,
+            "has_nearby_eonet": 0,
+            "precipitation_mm": 0,
+            "wind_speed_ms": 0,
+            "temperature_c": 25,
+            "humidity": 70,
         }
+
+        occurrences = context.get("occurrences", [])
+        if occurrences:
+            features.update(self._features_from_occurrence(occurrences[0]))
+
+        lat = occurrences[0].get("latitude") if occurrences else None
+        lon = occurrences[0].get("longitude") if occurrences else None
+        weather = self._weather_from_context(context, lat, lon)
+        features.update(weather)
 
         result = self.predict(features)
 
-        occurrences = context.get("occurrences", [])
         enriched_score = enrich_score_with_nlp(result.score, occurrences)
         result.score = enriched_score
         result.risk_label = score_to_label(enriched_score)
 
         return result
-
-    def _weather_encode(self, weather: dict) -> int:
-        precip = weather.get("precipitation_mm", 0)
-        if precip > 20:
-            return 3
-        elif precip > 5:
-            return 2
-        elif precip > 0:
-            return 1
-        return 0
-
-    def _day_phase_encode(self, hour: int) -> int:
-        if 6 <= hour < 12:
-            return 0
-        elif 12 <= hour < 18:
-            return 1
-        elif 18 <= hour < 22:
-            return 2
-        return 3
-
-
-    def _download_models_from_s3(self, dest_dir: Path) -> None:
-        import boto3
-        from src.core.config import AWS_ENDPOINT_URL, AWS_REGION
-
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        kwargs = {"region_name": AWS_REGION}
-        if AWS_ENDPOINT_URL:
-            kwargs["endpoint_url"] = AWS_ENDPOINT_URL
-
-        s3 = boto3.client("s3", **kwargs)
-        files = ["modelo_rf.pkl", "encoders.pkl", "model_metadata.json"]
-        for fname in files:
-            key = f"{_S3_MODEL_PREFIX}/{fname}"
-            dest = dest_dir / fname
-            try:
-                log.info("Baixando modelo do S3: s3://%s/%s → %s", S3_BUCKET, key, dest)
-                s3.download_file(S3_BUCKET, key, str(dest))
-                log.info("Download concluído: %s", fname)
-            except Exception as e:
-                log.warning("Não foi possível baixar %s do S3: %s", fname, e)
 
 
 _predictor: RiskPredictor | None = None
@@ -158,6 +183,6 @@ def get_predictor() -> RiskPredictor:
         _predictor = RiskPredictor()
         try:
             _predictor.load_model()
-        except ModelNotFoundError:
+        except FileNotFoundError:
             log.warning("Modelo não encontrado — preditor em modo stub (score=0)")
     return _predictor

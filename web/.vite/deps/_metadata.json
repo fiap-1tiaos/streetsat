@@ -2,7 +2,119 @@
   "hash": "e82a3cf5",
   "configHash": "45e715f0",
   "lockfileHash": "c41004d0",
-  "browserHash": "62c9086d",
-  "optimized": {},
-  "chunks": {}
+  "browserHash": "198bf038",
+  "optimized": {
+    "@tsparticles/react": {
+      "src": "../../node_modules/@tsparticles/react/index.js",
+      "file": "@tsparticles_react.js",
+      "fileHash": "713f2e86",
+      "needsInterop": false
+    },
+    "@tsparticles/slim": {
+      "src": "../../node_modules/@tsparticles/slim/browser/index.js",
+      "file": "@tsparticles_slim.js",
+      "fileHash": "cfccff93",
+      "needsInterop": false
+    },
+    "lucide-react": {
+      "src": "../../node_modules/lucide-react/dist/esm/lucide-react.mjs",
+      "file": "lucide-react.js",
+      "fileHash": "31edbf1a",
+      "needsInterop": false
+    },
+    "motion/react": {
+      "src": "../../node_modules/motion/dist/es/react.mjs",
+      "file": "motion_react.js",
+      "fileHash": "aa9c943a",
+      "needsInterop": false
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "2a66466f",
+      "needsInterop": true
+    },
+    "react-leaflet": {
+      "src": "../../node_modules/react-leaflet/lib/index.js",
+      "file": "react-leaflet.js",
+      "fileHash": "833298cc",
+      "needsInterop": false
+    },
+    "react-router": {
+      "src": "../../node_modules/react-router/dist/development/index.mjs",
+      "file": "react-router.js",
+      "fileHash": "7a7d0bba",
+      "needsInterop": false
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "e0158b93",
+      "needsInterop": true
+    },
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "b630ffe5",
+      "needsInterop": true
+    }
+  },
+  "chunks": {
+    "BlendPluginInstance-CnhN7JD-": {
+      "file": "BlendPluginInstance-CnhN7JD-.js",
+      "isDynamicEntry": true
+    },
+    "ColorUtils-CuV_iiRF": {
+      "file": "ColorUtils-CuV_iiRF.js",
+      "isDynamicEntry": false
+    },
+    "Container-BC_tD0Nq": {
+      "file": "Container-BC_tD0Nq.js",
+      "isDynamicEntry": true
+    },
+    "ImagePreloaderInstance-Bkwxayr5": {
+      "file": "ImagePreloaderInstance-Bkwxayr5.js",
+      "isDynamicEntry": true
+    },
+    "InteractivityConstants-9V2wFahK": {
+      "file": "InteractivityConstants-9V2wFahK.js",
+      "isDynamicEntry": false
+    },
+    "InteractivityPluginInstance-B87qE63I": {
+      "file": "InteractivityPluginInstance-B87qE63I.js",
+      "isDynamicEntry": true
+    },
+    "LinkInstance-BZ_6B821": {
+      "file": "LinkInstance-BZ_6B821.js",
+      "isDynamicEntry": true
+    },
+    "MovePluginInstance-DsI7noOI": {
+      "file": "MovePluginInstance-DsI7noOI.js",
+      "isDynamicEntry": true
+    },
+    "OverlapPluginInstance-Bod-qaAH": {
+      "file": "OverlapPluginInstance-Bod-qaAH.js",
+      "isDynamicEntry": true
+    },
+    "RotateDirection-D96AavKe": {
+      "file": "RotateDirection-D96AavKe.js",
+      "isDynamicEntry": false
+    },
+    "browser-Bo2Gf3WI": {
+      "file": "browser-Bo2Gf3WI.js",
+      "isDynamicEntry": false
+    },
+    "jsx-runtime-gvUgNymC": {
+      "file": "jsx-runtime-gvUgNymC.js",
+      "isDynamicEntry": false
+    },
+    "react-B6BdZLWZ": {
+      "file": "react-B6BdZLWZ.js",
+      "isDynamicEntry": false
+    },
+    "react-dom-ChMvxt5E": {
+      "file": "react-dom-ChMvxt5E.js",
+      "isDynamicEntry": false
+    }
+  }
 }

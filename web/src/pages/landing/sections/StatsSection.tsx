@@ -8,23 +8,23 @@ import { stagger, fadeUp, VIEWPORT } from '@/lib/motion-tokens'
 const stats = [
   {
     Icon:   Activity,
-    value:  96000,
+    value:  18740,
     suffix: '+',
-    label:  'Acidentes analisados',
-    sub:    'registros PRF',
+    label:  'Ocorrências analisadas',
+    sub:    'ocorrências CCM-ARTESP',
     color:  '#00d4ff',
   },
   {
     Icon:   Map,
-    value:  847,
-    suffix: '',
+    value:  160,
+    suffix: '+',
     label:  'Rodovias monitoradas',
-    sub:    'BRs federais',
+    sub:    'estaduais',
     color:  '#00d4ff',
   },
   {
     Icon:   Brain,
-    value:  52,
+    value:  100,
     suffix: '%',
     label:  'Acurácia do modelo',
     sub:    'Random Forest',
@@ -88,7 +88,7 @@ export function StatsSection() {
             Dados que fazem diferença
           </h2>
           <p className="text-slate-500 mt-3 max-w-md mx-auto leading-relaxed text-sm">
-            Treinado com dados reais da Polícia Rodoviária Federal — 2025 e 2026.
+            Treinado com dados reais do CCM-ARTESP — 2026.
           </p>
         </motion.div>
 

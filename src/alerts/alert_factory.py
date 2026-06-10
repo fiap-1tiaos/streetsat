@@ -14,7 +14,7 @@ DEDUP_MINUTES = 30
 @dataclass
 class Alert:
     alert_id: str
-    br: int
+    road: str
     km: float
     municipio: str
     risk_score: int
@@ -49,7 +49,7 @@ def create_alert(occurrence: dict, risk_score: int) -> Alert | None:
 
     alert = Alert(
         alert_id=str(uuid.uuid4()),
-        br=int("".join(filter(str.isdigit, road)) or "0"),
+        road=road,
         km=km,
         municipio=municipio,
         risk_score=risk_score,

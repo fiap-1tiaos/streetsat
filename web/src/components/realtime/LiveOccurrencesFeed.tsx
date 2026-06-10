@@ -14,7 +14,7 @@ export function LiveOccurrencesFeed({ occurrences, maxItems = 8 }: Props) {
       <AnimatePresence initial={false}>
         {items.map((o) => (
           <motion.div
-            key={o.id}
+            key={o.occurrence_id}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
@@ -41,17 +41,17 @@ export function LiveOccurrencesFeed({ occurrences, maxItems = 8 }: Props) {
             />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 500 }}>
-                BR-{o.br} · km {o.km}
+                {o.road} · km {o.km}
               </div>
               <div style={{ fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {o.municipio}/{o.uf} · {o.tipo}
+                {o.municipio}/{o.state} · {o.occurrence_type}
               </div>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <div style={{ fontSize: '0.7rem', color: RISK_COLORS[o.risk_score], fontWeight: 600, fontFamily: 'JetBrains Mono, monospace' }}>
                 {RISK_LABELS[o.risk_score]}
               </div>
-              <div style={{ fontSize: '0.65rem', color: '#475569' }}>{timeAgo(o.detectado_em)}</div>
+              <div style={{ fontSize: '0.65rem', color: '#475569' }}>{timeAgo(o.detected_at)}</div>
             </div>
           </motion.div>
         ))}

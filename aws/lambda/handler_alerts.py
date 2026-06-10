@@ -1,4 +1,3 @@
-"""Lambda: Publica alertas de risco via SNS."""
 import json
 import os
 import sys
@@ -30,19 +29,19 @@ def _format_message(alert: dict) -> tuple[str, str]:
     score = alert.get("risk_score", 0)
     label = alert.get("risk_label") or RISK_LABELS.get(score, "Desconhecido")
     emoji = RISK_EMOJI.get(score, "⚠️")
-    br = alert.get("br", "?")
+    road = alert.get("road", "?")
     km = alert.get("km", "?")
     confidence = alert.get("confidence", 0)
 
-    subject = f"{emoji} Alerta Streetsat: Risco {label} — BR-{br} km {km}"
+    subject = f"{emoji} Alerta Streetsat: Risco {label} — {road} km {km}"
     message = (
         f"{emoji} ALERTA DE RISCO RODOVIÁRIO\n\n"
-        f"Rodovia: BR-{br}\n"
+        f"Rodovia: {road}\n"
         f"KM: {km}\n"
         f"Nível de risco: {label} (score {score}/3)\n"
         f"Confiança do modelo: {confidence:.1%}\n\n"
         f"Recomendação: {'Evite este trecho.' if score >= 2 else 'Atenção redobrada neste trecho.'}\n\n"
-        f"— Streetsat · Monitoramento Inteligente de Rodovias"
+        f"— Streetsat · Monitoramento Inteligente de Rodovias Paulistas"
     )
     return subject, message
 
@@ -62,7 +61,7 @@ def lambda_handler(event, context):
             alert = json.loads(record.get("body", "{}"))
             subject, message = _format_message(alert)
             sns.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject[:100], Message=message)
-            log.info("Alerta publicado: BR-%s km %s risco=%s", alert.get("br"), alert.get("km"), alert.get("risk_score"))
+            log.info("Alerta publicado: %s km %s risco=%s", alert.get("road"), alert.get("km"), alert.get("risk_score"))
             published += 1
         except Exception as e:
             log.error("Erro ao publicar alerta: %s", e)

@@ -1,6 +1,6 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import { AlertTriangle, Activity, Cpu, Clock } from 'lucide-react'
+import { AlertTriangle, Activity, Clock, Calendar } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useRealtime } from '@/hooks/useRealtime'
 import { useOccurrencesStore } from '@/stores/occurrencesStore'
@@ -11,25 +11,25 @@ import { OccurrencesTimeline } from '@/components/charts/OccurrencesTimeline'
 import { HeatmapChart } from '@/components/charts/HeatmapChart'
 import { LiveOccurrencesFeed } from '@/components/realtime/LiveOccurrencesFeed'
 
-const MOCK_OCC: Occurrence[] = Array.from({ length: 20 }, (_, i) => ({
-  id: `OC-${String(i + 1).padStart(4, '0')}`,
-  br: [101, 116, 381, 40, 50, 153][i % 6],
-  km: 100 + i * 15,
-  municipio: ['São Paulo', 'Guarulhos', 'Campinas', 'Curitiba', 'Betim', 'Belo Horizonte'][i % 6],
-  uf: ['SP', 'SP', 'SP', 'PR', 'MG', 'MG'][i % 6],
-  tipo: ['Colisão', 'Tombamento', 'Atropelamento', 'Capotamento'][i % 4],
-  interdicao: i % 3 === 0,
-  risk_score: (i % 4) as 0 | 1 | 2 | 3,
-  risk_label: ['Livre', 'Atenção', 'Alto', 'Crítico'][i % 4],
-  detectado_em: new Date(Date.now() - i * 1800_000).toISOString(),
-  lat: [-23.5, -25.4, -19.9, -21.7, -19.7, -22.9, -20.3, -27.6, -30.0, -16.7,
-        -23.1, -25.0, -20.4, -22.1, -18.9, -23.8, -21.2, -26.3, -29.1, -17.3][i],
-  lon: [-46.6, -49.3, -44.2, -43.3, -47.9, -43.2, -40.3, -48.5, -51.2, -49.3,
-        -47.1, -50.0, -44.8, -43.9, -48.4, -43.7, -41.0, -49.0, -51.8, -49.8][i],
-}))
+function todayStr() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function sevenDaysAgo() {
+  const d = new Date()
+  d.setDate(d.getDate() - 7)
+  return d.toISOString().slice(0, 10)
+}
+
+function isInRange(dateStr: string, start: string, end: string) {
+  const d = dateStr.slice(0, 10)
+  return d >= start && d <= end
+}
 
 export default function DashboardPage() {
   const { occurrences, setOccurrences, setApiOnline, setLastUpdated, lastUpdated } = useOccurrencesStore()
+  const [dateStart, setDateStart] = useState(sevenDaysAgo())
+  const [dateEnd, setDateEnd] = useState(todayStr())
 
   const fetcher = useCallback(() => api.occurrences(), [])
   const { data, error } = useRealtime({ fetcher, intervalMs: 30_000 })
@@ -37,29 +37,28 @@ export default function DashboardPage() {
   useEffect(() => {
     if (data) {
       const occ = data as Occurrence[]
-      setOccurrences(occ.length > 0 ? occ : MOCK_OCC)
+      setOccurrences(occ)
       setApiOnline(true)
       setLastUpdated(new Date())
-    } else {
-      setOccurrences(MOCK_OCC)
     }
   }, [data, setOccurrences, setApiOnline, setLastUpdated])
 
   useEffect(() => {
     if (error) {
       setApiOnline(false)
-      if (occurrences.length === 0) setOccurrences(MOCK_OCC)
     }
-  }, [error, setApiOnline, occurrences.length, setOccurrences])
+  }, [error, setApiOnline])
 
-  const occ = occurrences.length > 0 ? occurrences : MOCK_OCC
-  const critical = occ.filter((o: Occurrence) => o.risk_score === 3).length
-  const active = occ.length
+  const occ = occurrences
+  const occFiltered = occ.filter((o) => isInRange(o.detected_at, dateStart, dateEnd))
+  const critical = occFiltered.filter((o: Occurrence) => o.risk_score === 3).length
+  const active = occFiltered.length
+  const finalized = occFiltered.filter((o: Occurrence) => o.status === 'Finalizada').length
 
-  const kpis = [
-    { label: 'Ocorrências Ativas', value: active, icon: Activity, color: '#00d4ff', delta: '+3' },
+  const kpis: Array<{ label: string; value: string | number; icon: typeof Activity; color: string; blink?: boolean }> = [
+    { label: 'Ocorrências no Período', value: active, icon: Activity, color: '#00d4ff' },
     { label: 'Críticas', value: critical, icon: AlertTriangle, color: '#ef4444', blink: critical > 0 },
-    { label: 'Uptime API', value: '99.8%', icon: Cpu, color: '#22c55e' },
+    { label: 'Finalizadas', value: finalized, icon: Calendar, color: '#22c55e' },
     { label: 'Última Inferência', value: lastUpdated ? timeAgo(lastUpdated.toISOString()) : '—', icon: Clock, color: '#f59e0b' },
   ]
 
@@ -92,40 +91,79 @@ export default function DashboardPage() {
               >
                 {kpi.value}
               </span>
-              {kpi.delta && (
-                <span style={{ fontSize: '0.75rem', color: '#22c55e', fontFamily: 'JetBrains Mono, monospace' }}>{kpi.delta}</span>
-              )}
             </div>
           </motion.div>
         ))}
       </div>
 
-      {/* Map + Feed */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '1rem' }}>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="glass-card"
-          style={{ borderRadius: '12px', overflow: 'hidden', height: '420px' }}
-        >
-          <RiskMap occurrences={occ} height="100%" />
-        </motion.div>
+      {/* Date Range Filter + Map + Feed */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <Calendar size={16} color="#64748b" />
+          <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>De</span>
+          <input
+            type="date"
+            value={dateStart}
+            onChange={(e) => setDateStart(e.target.value)}
+            max={dateEnd}
+            style={{
+              background: '#0d1f2d',
+              border: '1px solid rgba(0,212,255,0.2)',
+              borderRadius: '8px',
+              padding: '0.5rem 0.75rem',
+              color: '#e2e8f0',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '0.8rem',
+            }}
+          />
+          <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>até</span>
+          <input
+            type="date"
+            value={dateEnd}
+            onChange={(e) => setDateEnd(e.target.value)}
+            min={dateStart}
+            max={todayStr()}
+            style={{
+              background: '#0d1f2d',
+              border: '1px solid rgba(0,212,255,0.2)',
+              borderRadius: '8px',
+              padding: '0.5rem 0.75rem',
+              color: '#e2e8f0',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '0.8rem',
+            }}
+          />
+          <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>
+            {occFiltered.length} ocorrências
+          </span>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
-          className="glass-card"
-          style={{ borderRadius: '12px', padding: '1rem', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
-        >
-          <h3 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: '0.875rem', margin: 0, color: '#94a3b8' }}>
-            Feed de Alertas
-          </h3>
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            <LiveOccurrencesFeed occurrences={occ.filter((o: Occurrence) => o.risk_score >= 2)} maxItems={10} />
-          </div>
-        </motion.div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '1rem' }}>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="glass-card"
+            style={{ borderRadius: '12px', overflow: 'hidden', height: '420px' }}
+          >
+            <RiskMap occurrences={occFiltered} height="100%" />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.4 }}
+            className="glass-card"
+            style={{ borderRadius: '12px', padding: '1rem', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+          >
+            <h3 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: '0.875rem', margin: 0, color: '#94a3b8' }}>
+              Feed de Alertas
+            </h3>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              <LiveOccurrencesFeed occurrences={occFiltered.filter((o: Occurrence) => o.risk_score >= 2)} maxItems={10} />
+            </div>
+          </motion.div>
+        </div>
       </div>
 
       {/* Charts */}
@@ -138,9 +176,9 @@ export default function DashboardPage() {
           style={{ borderRadius: '12px', padding: '1.25rem' }}
         >
           <h3 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: '0.875rem', margin: '0 0 1rem', color: '#94a3b8' }}>
-            Ocorrências — Últimas 24h
+            Ocorrências no Período
           </h3>
-          <OccurrencesTimeline occurrences={occ} />
+          <OccurrencesTimeline occurrences={occFiltered} />
         </motion.div>
 
         <motion.div
@@ -153,7 +191,7 @@ export default function DashboardPage() {
           <h3 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: '0.875rem', margin: '0 0 0.5rem', color: '#94a3b8' }}>
             Distribuição Score
           </h3>
-          <RiskDonutChart occurrences={occ} />
+          <RiskDonutChart occurrences={occFiltered} />
         </motion.div>
 
         <motion.div
@@ -164,7 +202,7 @@ export default function DashboardPage() {
           style={{ borderRadius: '12px', padding: '1.25rem' }}
         >
           <h3 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: '0.875rem', margin: '0 0 1rem', color: '#94a3b8' }}>
-            Mapa de Calor — Histórico PRF
+            Mapa de Risco — CCM-ARTESP
           </h3>
           <HeatmapChart />
         </motion.div>
