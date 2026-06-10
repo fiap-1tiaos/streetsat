@@ -26,7 +26,7 @@ Monitoramento inteligente de rotas brasileiras via satélite e IA.
 
 ## Links:
 
-- <a href="https://youtu.be/hrgigyV0mVw">FIAP — Global Solution 2 (2026) | ODS 8, 9 e 11</a>
+- Vídeo demonstrativo: <a href="https://youtu.be/hrgigyV0mVw">FIAP — Global Solution 2 (2026) | ODS 8, 9 e 11</a>
 
 ---
 
