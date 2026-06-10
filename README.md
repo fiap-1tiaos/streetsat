@@ -62,7 +62,7 @@ O resultado final é exposto via API REST (FastAPI), visualizado em um dashboard
 ## Arquitetura do Sistema
 
 ```
-┌──────────────────────────────────────────────────────────────┐
+┌───────────────────────────────────────────────────────────────┐
 │                        FONTES DE DADOS                        │
 │  ARTESP CSV (18.7k)  │  ARTESP scraping  │  NASA EONET + Open-Meteo │
 └────────┬─────────────────┬──────────────────────┬────────────┘
@@ -75,8 +75,8 @@ O resultado final é exposto via API REST (FastAPI), visualizado em um dashboard
 └──────┬───────┘            │                        │
        │                    ▼                        │
        │           ┌─────────────────┐               │
-       │           │   SQS Inference │               │
-       │           │   Queue         │               │
+       │           │  SQS Inference  │               │
+       │           │      Queue      │               │
        │           └────────┬────────┘               │
        ▼                    ▼                        ▼
 ┌──────────────────────────────────────────────────────────────┐
@@ -90,29 +90,29 @@ O resultado final é exposto via API REST (FastAPI), visualizado em um dashboard
 │                   CAMADA 2: NLP SEMÂNTICO                      │
 │   AWS Comprehend (prod) / LocalNLP PT-BR (dev)                │
 │   Análise de sentimento + entidades → severity boost +1/+2    │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-                           ▼
+└─────────────────────────────┬─────────────────────────────────┘
+                              │
+                              ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                   CAMADA 3: ROTEAMENTO                         │
-│   NetworkX — grafo de rodovias com pesos de risco             │
-│   Dijkstra (menor peso) vs. direto (menor distância)          │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-              ┌────────────┴────────────┐
-              ▼                         ▼
-     ┌─────────────────┐      ┌──────────────────┐
-     │   FastAPI REST  │      │  Plotly Dash      │
-     │   :8000         │      │  Dashboard :5000  │
-     └────────┬────────┘      └──────────────────┘
+│                   CAMADA 3: ROTEAMENTO                       │
+│       NetworkX — grafo de rodovias com pesos de risco        │
+│      Dijkstra (menor peso) vs. direto (menor distância)      │
+└─────────────────────────────┬────────────────────────────────┘
+                              │
+              ┌───────────────┴──────────────┐
+              ▼                              ▼
+     ┌─────────────────┐            ┌───────────────────┐
+     │   FastAPI REST  │            │  Plotly Dash      │
+     │   :8000         │            │  Dashboard :5000  │
+     └────────┬────────┘            └───────────────────┘
               │
      ┌────────┴─────────┐
      │                  │
      ▼                  ▼
-┌─────────┐    ┌──────────────┐
-│  Redis  │    │  SNS Alerts  │
-│  Cache  │    │  (e-mail/SMS)│
-└─────────┘    └──────────────┘
+┌─────────┐    ┌────────────────┐
+│  Redis  │    │  SNS Alerts    │
+│  Cache  │    │  (e-mail/SMS)  │
+└─────────┘    └────────────────┘
 ```
 
 ---
@@ -980,7 +980,7 @@ API_BASE_URL=http://localhost:8000
 
 ## Início Rápido
 
-### Modo local (sem Docker)
+### Modo local — Linux | Mac
 
 ```bash
 # 1. Criar ambiente virtual
@@ -1002,11 +1002,53 @@ make train
 
 # 6. Subir a API
 make api
-# → http://localhost:8000/docs
 
-# 7. Subir o dashboard (outro terminal)
+# API disponível em:
+http://localhost:8000/docs
+
+# 7. Subir o dashboard (abra outro terminal com (.venv) ativo, sem fechar o anterior)
 make dashboard
-# → http://localhost:5000
+
+# Dashboard disponível em: 
+http://localhost:5000
+```
+
+### Modo local — Windows
+
+```bash
+# 1. Criar e ativar o ambiente virtual
+python -m venv .venv
+# Aperte CTRL + SHIFT + P
+# Procure por > Python: Select Interpreter
+# Selecione o que tem (.venv)
+# Ative com o comando abaixo (se no terminal não aparecer (.venv), feche-o e abra outro)
+.venv\Scripts\activate    
+
+# 2. Instalar dependências
+pip install -r requirements.txt
+
+# 3. Configurar variáveis de ambiente
+copy .env.example .env.local
+# Editar .env.local com suas credenciais
+
+# 4. Subir bancos via Docker (apenas infraestrutura)
+docker-compose up -d postgres redis mongodb localstack
+# Requer Docker Desktop em execução
+
+# 5. Treinar modelo
+python scripts\train_model.py
+
+# 6. Subir a API
+uvicorn src.api.fastapi_app:app --host 0.0.0.0 --port 8000 --reload
+
+# API disponível em:
+http://localhost:8000/docs
+
+# 7. Subir o dashboard (abra outro terminal com (.venv) ativo, sem fechar o anterior)
+python dashboard\app.py
+
+# Dashboard disponível em:
+http://localhost:5000
 ```
 
 ### Demos disponíveis
